@@ -4,3 +4,4 @@ src/**    eol=crlf
 src/lib   -diff -text
 *.bmp     -diff -text
 *.ico     -diff -text
+*.png     -diff -text

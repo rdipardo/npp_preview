@@ -1,2 +1,4 @@
 TB_PREVIEW_HTML               BITMAP                  "PreviewHTML_TB.bmp"
+TB_BMP_DATA                   RCDATA                  "PreviewHTML_TB.png"
+TB_PREVIEW_HTML_ICO_DM        ICON                    "PreviewHTML_TB_Dark.ico"
 TB_PREVIEW_HTML_ICO           ICON                    "PreviewHTML_TB.ico"

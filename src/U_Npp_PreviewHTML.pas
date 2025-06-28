@@ -60,9 +60,14 @@ var
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 implementation
 uses
+  Graphics,
+  Imaging.pngimage,
   WebBrowser, Registry,
   ModulePath,
   Debug;
+
+var
+  ToolbarBmp: TBitMap;
 
 { ------------------------------------------------------------------------------------------------ }
 procedure _FuncOpenSettings; cdecl;
@@ -278,26 +283,37 @@ const
 var
   tb: TToolbarIcons;
   tbDM: TTbIconsDarkMode;
+  bmpData: TPngImage;
   hHDC: HDC;
   bmpX, bmpY, icoX, icoY: Integer;
 begin
   hHDC := hNil;
+  bmpData := TPngImage.Create;
+  ToolbarBmp := TBitmap.Create;
   try
     hHDC := GetDC(hNil);
     bmpX := MulDiv(16, GetDeviceCaps(hHDC, LOGPIXELSX), 96);
     bmpY := MulDiv(16, GetDeviceCaps(hHDC, LOGPIXELSY), 96);
     icoX := MulDiv(32, GetDeviceCaps(hHDC, LOGPIXELSX), 96);
     icoY := MulDiv(32, GetDeviceCaps(hHDC, LOGPIXELSY), 96);
+    try
+      bmpData.LoadFromResourceName(HInstance, 'TB_BMP_DATA');
+      ToolbarBmp.Assign(bmpData);
+      ToolbarBmp.PixelFormat := pf32bit;
+      tb.ToolbarBmp := CopyImage(ToolbarBmp.Handle, IMAGE_BITMAP, bmpX, bmpY, LR_COPYRETURNORG);
+    except
+      tb.ToolbarBmp := LoadImage(Hinstance, 'TB_PREVIEW_HTML', IMAGE_BITMAP, bmpX, bmpY, 0);
+    end;
   finally
     ReleaseDC(hNil, hHDC);
+    FreeAndNil(bmpData);
   end;
   tb.ToolbarIcon := LoadImage(Hinstance, 'TB_PREVIEW_HTML_ICO', IMAGE_ICON, icoX, icoY, (LR_DEFAULTSIZE or LR_LOADTRANSPARENT));
-  tb.ToolbarBmp := LoadImage(Hinstance, 'TB_PREVIEW_HTML', IMAGE_BITMAP, bmpX, bmpY, 0);
   if SupportsDarkMode then begin
     with tbDM do begin
       ToolbarBmp := tb.ToolbarBmp;
       ToolbarIcon := tb.ToolbarIcon;
-      ToolbarIconDarkMode := tb.ToolbarIcon;
+      ToolbarIconDarkMode := LoadImage(Hinstance, 'TB_PREVIEW_HTML_ICO_DM', IMAGE_ICON, icoX, icoY, (LR_DEFAULTSIZE or LR_LOADTRANSPARENT));
     end;
     SendNppMessage(NPPM_ADDTOOLBARICON_FORDARKMODE, self.CmdIdFromDlgId(0), @tbDm);
   end else
@@ -342,4 +358,8 @@ initialization
   except
     ShowException(ExceptObject, ExceptAddr);
   end;
+
+finalization
+  if Assigned(ToolbarBmp) then
+    FreeAndNil(ToolbarBmp);
 end.
