@@ -198,7 +198,8 @@ ODS('About to synchronize HTML of length %d in thread ID [%x]', [Length(HTML), G
       Synchronize(procedure
                   begin
 ODS('Synchronizing HTML of length %d in thread ID [%x]', [Length(HTML), GetCurrentThreadID]);
-                    frmHTMLPreview.DisplayPreview(HTML, FData.BufferID);
+                    ContentStream.Text := HTML;
+                    frmHTMLPreview.DisplayPreview(FData.BufferID);
                   end);
     end;
 

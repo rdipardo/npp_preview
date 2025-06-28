@@ -8,6 +8,7 @@ uses
   Dialogs, StdCtrls, SHDocVw, OleCtrls, ComCtrls, ExtCtrls, IniFiles,
   NppPlugin, NppDockingForms,
   WebBrowser,
+  customstreams,
   U_CustomFilter;
 
 type
@@ -52,6 +53,7 @@ type
     FFilterThread: TCustomFilterThread;
     FScrollTop: Integer;
     FScrollLeft: Integer;
+    FEnsureRendered: Boolean;
 
     procedure SaveScrollPos;
     procedure RestoreScrollPos(const BufferID: TBufferID);
@@ -68,10 +70,11 @@ type
     procedure ToggleDarkMode; override;
     procedure ResetTimer;
     procedure ForgetBuffer(const BufferID: TBufferID);
-    procedure DisplayPreview(HTML: string; const BufferID: TBufferID);
+    procedure DisplayPreview(const BufferID: TBufferID);
   end;
 
 var
+  ContentStream: TUnicodeStream;
   frmHTMLPreview: TfrmHTMLPreview;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -156,8 +159,7 @@ var
   Lexer: NativeInt;
   IsHTML, IsXML, IsCustom: Boolean;
   Size: WPARAM;
-  Content: UTF8String;
-  HTML: string;
+  HTML: TUnicodeStreamString;
   FilterName: string;
   CodePage: NativeInt;
 begin
@@ -189,20 +191,12 @@ ODS('FreeAndNil(FFilterThread);');
         CodePage := SendMessage(hScintilla, SCI_GETCODEPAGE, 0, 0);
         Size := SendMessage(hScintilla, SCI_GETTEXT, 0, 0);
         Inc(Size);
-        SetLength(Content, Size);
-        SendMessage(hScintilla, SCI_GETTEXT, Size, LPARAM(PAnsiChar(Content)));
-        if CodePage = CP_ACP then begin
-          HTML := string(PAnsiChar(Content));
-        end else begin
-          SetLength(HTML, Size);
-          if Size > 0 then begin
-            SetLength(HTML, MultiByteToWideChar(CodePage, 0, PAnsiChar(Content), Size, PWideChar(HTML), Length(HTML)));
-            if Length(HTML) = 0 then
-              RaiseLastOSError;
-          end;
-        end;
+        ContentStream.Size := Size;
+        ContentStream.CodePage := CodePage;
+        SendMessage(hScintilla, SCI_GETTEXT, Size, LPARAM(ContentStream.Data));
       end;
 
+      HTML := ContentStream.Text;
       if IsCustom then begin
 //MessageBox(Npp.NppData.NppHandle, PChar(Format('FilterName: %s', [FilterName])), 'PreviewHTML', MB_ICONINFORMATION);
         wbIEStatusTextChange(wbIE, Format('Running filter %s...', [FilterName]));
@@ -210,13 +204,13 @@ ODS('FreeAndNil(FFilterThread);');
           Exit;
         end else begin
           wbIEStatusTextChange(wbIE, Format('Failed filter %s...', [FilterName]));
-          HTML := '<pre style="color: darkred">ExecuteCustomFilter returned False</pre>';
+          ContentStream.Text := '<pre style="color: darkred">ExecuteCustomFilter returned False</pre>';
         end;
       end else if IsXML then begin
-        HTML := TransformXMLToHTML(HTML);
+        ContentStream.Text := TransformXMLToHTML(HTML);
       end;
 
-      DisplayPreview(HTML, BufferID);
+      DisplayPreview(BufferID);
     finally
       Screen.Cursor := crDefault;
     end;
@@ -238,21 +232,22 @@ begin
 end {TfrmHTMLPreview.chkFreezeClick};
 
 { ------------------------------------------------------------------------------------------------ }
-procedure TfrmHTMLPreview.DisplayPreview(HTML: string; const BufferID: TBufferID);
+procedure TfrmHTMLPreview.DisplayPreview(const BufferID: TBufferID);
 var
   IsHTML: Boolean;
   HeadStart: Integer;
   Size: WPARAM;
   Filename: nppString;
-  View: Integer;
+  HTML: TUniCodeStreamString;
   hScintilla: THandle;
 begin
-ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy(HTML, 1, 10), #13#10, '', [rfReplaceAll]), Length(HTML), BufferID]);
   try
-    IsHTML := Length(HTML) > 0;
+    IsHTML := not ContentStream.Empty;
     pnlHTML.Visible := IsHTML;
     sbrIE.Visible := IsHTML and (Length(sbrIE.SimpleText) > 0);
     if IsHTML then begin
+      HTML := ContentStream.Text;
+ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy(HTML, 1, 10), #13#10, '', [rfReplaceAll]), Length(HTML), BufferID]);
       Size := SendMessage(Self.Npp.NppData.NppHandle, NPPM_GETFULLPATHFROMBUFFERID, BufferID, LPARAM(nil));
       SetLength(Filename, Size);
       SetLength(Filename, SendMessage(Self.Npp.NppData.NppHandle, NPPM_GETFULLPATHFROMBUFFERID, BufferID, LPARAM(nppPChar(Filename))));
@@ -263,9 +258,14 @@ ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy(HTML, 1,
         else
           HeadStart := 1;
         Insert('<base href="' + Filename + '" />', HTML, HeadStart);
+        ContentStream.Text := HTML;
       end;
 
-      wbIE.LoadDocFromString(HTML);
+      wbIE.LoadDocFromString(ContentStream.Text);
+      if FEnsureRendered then begin
+        ResetTimer;
+        FEnsureRendered := False;
+      end;
 
       if wbIE.GetDocument <> nil then
         self.UpdateDisplayInfo(wbIE.GetDocument.title)
@@ -352,6 +352,8 @@ begin
   if Assigned(FScrollPositions) then begin
     FScrollPositions.Remove(BufferID);
   end;
+  ContentStream.Clear;
+  ResetTimer;
 end {TfrmHTMLPreview.ForgetBuffer};
 
 { ------------------------------------------------------------------------------------------------ }
@@ -374,12 +376,11 @@ var
   Extensions: TStringList;
   Filespec: string;
 begin
-  DocFileName := StringOfChar(#0, MAX_PATH);
-  SendMessage(Npp.NppData.NppHandle, NPPM_GETFILENAME, WPARAM(Length(DocFileName)), LPARAM(nppPChar(DocFileName)));
-  DocFileName := nppString(nppPChar(DocFileName));
+  DocFileName := Npp.GetCurrentBufferPath;
 
   DocLangType := -1;
   DocLanguage := '';
+  Result := String.Empty;
 
   ForceDirectories(TNppPluginPreviewHTML(Npp).ConfigDir + '\PreviewHTML');
   Filters := TIniFile.Create(TNppPluginPreviewHTML(Npp).ConfigDir + '\PreviewHTML\Filters.ini');
@@ -439,7 +440,7 @@ begin
       {$MESSAGE HINT 'TODO: Test lexer — MCO 22-01-2013'}
 
       if Match then
-        Exit(Names[i]);
+        SetString(Result, PChar(Names[i]), Length(Names[i]));
     end;
   finally
     Names.Free;
@@ -459,9 +460,7 @@ begin
   FilterData.Name := FilterName;
   FilterData.BufferID := BufferID;
 
-  DocFile := StringOfChar(#0, MAX_PATH);
-  SendMessage(Npp.NppData.NppHandle, NPPM_GETFULLCURRENTPATH, WPARAM(Length(DocFile)), LPARAM(PChar(DocFile)));
-  DocFile := string(PChar(DocFile));
+  DocFile := Npp.GetCurrentBufferPath;
   FilterData.DocFile := DocFile;
   FilterData.Contents := HTML;
 
@@ -557,6 +556,7 @@ procedure TfrmHTMLPreview.FormShow(Sender: TObject);
 begin
   inherited;
   SendMessage(self.Npp.NppData.NppHandle, NPPM_SETMENUITEMCHECK, self.CmdID, 1);
+  FEnsureRendered := True;
   ResetTimer;
 end;
 
@@ -715,8 +715,10 @@ end;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 initialization
+  ContentStream := TUnicodeStream.Create;
 
 finalization
+  FreeAndNil(ContentStream);
   if Assigned(frmHTMLPreview) then
     KillTimer(frmHTMLPreview.Handle, frmHTMLPreview.PrevTimerID);
 
