@@ -81,7 +81,8 @@ var
 implementation
 uses
   ShellAPI, ComObj, StrUtils, IOUtils, Masks, MSHTML,
-  RegExpr, ModulePath,
+  RegExpr,
+  Registry,
   Debug,
   U_Npp_PreviewHTML;
 
@@ -565,12 +566,27 @@ function TfrmHTMLPreview.TransformXMLToHTML(const XML: WideString): string;
   { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
   function CreateDOMDocument: OleVariant;
   var
+    RegKey: TRegistry;
+    RegValues: TStringList;
+    I: Integer;
     nVersion: Integer;
   begin
     VarClear(Result);
-    for nVersion := 7 downto 4 do begin
+    RegValues := TStringList.Create;
+    RegKey := TRegistry.Create;
+    try
+      RegKey.RootKey := HKEY_CLASSES_ROOT;
+      if RegKey.OpenKeyReadOnly('CLSID\{2933BF90-7B36-11D2-B20E-00C04F983E60}\VersionList') then
+        RegKey.GetValueNames(RegValues);
+      if RegValues.Count <> 0 then begin
+        for i := RegValues.Count - 1 downto 0 do
+        begin
+          Result := CreateOleObject(Format('MSXML2.DOMDocument.%s', [RegValues[i]]));
+          if not VarIsClear(Result) and TryStrToInt(Copy(RegValues[i], 1, 1), nVersion) then
+            Break;
+        end;
+      end;
       try
-        Result := CreateOleObject(Format('MSXML2.DOMDocument.%d.0', [nVersion]));
         if not VarIsClear(Result) then begin
           if nVersion >= 4 then begin
             Result.setProperty('NewParser', True);
@@ -582,12 +598,14 @@ function TfrmHTMLPreview.TransformXMLToHTML(const XML: WideString): string;
             Result.setProperty('UseInlineSchema', True);
             Result.setProperty('ValidateOnParse', False);
           end;
-          Break;
         end;
       except
         VarClear(Result);
       end;
-    end{for};
+    finally
+      RegKey.Free;
+      RegValues.Free;
+    end;
   end {CreateDOMDocument};
   { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
 var
