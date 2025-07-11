@@ -1,8 +1,10 @@
 object AboutForm: TAboutForm
+  Left = 0
+  Top = 0
   BorderIcons = []
   BorderStyle = bsDialog
   Caption = 'About Preview HTML'
-  ClientHeight = 261
+  ClientHeight = 315
   ClientWidth = 372
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -12,11 +14,11 @@ object AboutForm: TAboutForm
   Font.Style = []
   Position = poScreenCenter
   OnCreate = FormCreate
-  TextHeight = 19
+  TextHeight = 15
   object lblPlugin: TLabel
     Left = 16
     Top = 8
-    Width = 214
+    Width = 215
     Height = 15
     Caption = 'HTML Preview plugin for Notepad++ %s'
     ShowAccelChar = False
@@ -24,16 +26,16 @@ object AboutForm: TAboutForm
   object lblAuthor: TLabel
     Left = 16
     Top = 33
-    Width = 271
+    Width = 268
     Height = 15
-    Caption = ''#169' 2011-2020 Martijn Coppoolse (v1.0.0.4 - v1.3.2.0)'
+    Caption = #169' 2011-2020 Martijn Coppoolse (v1.0.0.4 - v1.3.2.0)'
   end
   object lblBasedOn: TLabel
     Left = 16
     Top = 54
-    Width = 212
+    Width = 206
     Height = 15
-    Caption = ''#169' 2024                            (current version)'
+    Caption = #169' 2025                           (current version)'
   end
   object lblAuthorContact: TLabel
     Left = 60
@@ -41,7 +43,7 @@ object AboutForm: TAboutForm
     Width = 83
     Height = 15
     Cursor = crHandPoint
-    Hint = 'mailto:dipardo.r@gmail.com'
+    Hint = 'https://github.com/rdipardo'
     Caption = 'Robert Di Pardo'
     Font.Charset = DEFAULT_CHARSET
     Font.Color = clHotLight
@@ -54,18 +56,18 @@ object AboutForm: TAboutForm
   object lblTribute: TLabel
     Left = 16
     Top = 78
-    Width = 224
+    Width = 298
     Height = 15
-    Caption = 'Using the Delphi plugin template, '#169' 2008 '
+    Caption = 'Based on                         '#39's plugin template, GPLv3 License'
   end
   object lblTributeContact: TLabel
-    Left = 240
+    Left = 68
     Top = 78
-    Width = 112
+    Width = 81
     Height = 15
     Cursor = crHandPoint
     Hint = 'https://github.com/zobo'
-    Caption = 'Damjan Zobo Cvetko'
+    Caption = 'Damjan Cvetko'
     Font.Charset = DEFAULT_CHARSET
     Font.Color = clHotLight
     Font.Height = -12
@@ -77,50 +79,39 @@ object AboutForm: TAboutForm
   object lblLicense: TLabel
     Left = 16
     Top = 96
-    Width = 259
+    Width = 340
     Height = 15
-    Caption = 'Licensed under the GNU General Public License, Version 3 or later'
+    Caption = 'Using WebView4Delphi, '#169' 2025 Salvador D'#237'az Fau, MIT License'
   end
   object lblFcl: TLabel
     Left = 16
     Top = 120
-    Width = 256
+    Width = 237
     Height = 15
     Caption = 'Also using the Free Component Library (FCL)'
-  end  
+  end
   object lblFclAuthors: TLabel
     Left = 16
     Top = 138
-    Width = 256
+    Width = 251
     Height = 15
     Caption = #169' 1999-2008 the Free Pascal development team'
-  end  
+  end
   object lblFclLicense: TLabel
     Left = 16
     Top = 156
-    Width = 256
+    Width = 255
     Height = 15
     Caption = 'Licensed under the FPC modified LGPL Version 2'
-  end  
-  object btnOK: TButton
-    Left = 138
-    Top = 224
-    Width = 92
-    Height = 25
-    Cancel = True
-    Caption = '&Close'
-    Default = True
-    ModalResult = 1
-    TabOrder = 0
   end
   object lblURL: TLabel
     Left = 16
-    Top = 178
-    Width = 150
+    Top = 242
+    Width = 68
     Height = 15
     Cursor = crHandPoint
-    Hint = 'https://github.com/rdipardo/npp_preview'
-    Caption = 'View source code on GitHub'
+    Hint = 'https://github.com/rdipardo/npp_preview/issues'
+    Caption = 'Report a bug'
     Font.Charset = DEFAULT_CHARSET
     Font.Color = clHotLight
     Font.Height = -12
@@ -131,9 +122,43 @@ object AboutForm: TAboutForm
   end
   object lblIEVersion: TLabel
     Left = 16
-    Top = 198
-    Width = 207
+    Top = 222
+    Width = 258
     Height = 15
-    Caption = 'Internet Explorer version %s is installed.'
+    Caption = 'Microsoft Edge WebView2 version %s is installed.'
+  end
+  object lblWebView: TLabel
+    Left = 16
+    Top = 182
+    Width = 235
+    Height = 30
+    Caption = 'Also using'#13#10#169' Microsoft Corporation. All rights reserved.'
+  end
+  object lblWebViewLicense: TLabel
+    Left = 76
+    Top = 182
+    Width = 136
+    Height = 15
+    Cursor = crHandPoint
+    Hint = 'https://www.nuget.org/packages/Microsoft.Web.WebView2'
+    Caption = 'Microsoft.Web.WebView2'
+    Font.Charset = DEFAULT_CHARSET
+    Font.Color = clHotLight
+    Font.Height = -12
+    Font.Name = 'Segoe UI'
+    Font.Style = [fsUnderline]
+    ParentFont = False
+    OnClick = lblLinkClick
+  end
+  object btnOK: TButton
+    Left = 138
+    Top = 272
+    Width = 92
+    Height = 25
+    Cancel = True
+    Caption = '&Close'
+    Default = True
+    ModalResult = 1
+    TabOrder = 0
   end
 end

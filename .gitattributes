@@ -2,6 +2,7 @@
 *.cmd     eol=crlf
 src/**    eol=crlf
 src/lib   -diff -text
+src/WebView4Delphi -diff -text
 *.bmp     -diff -text
 *.ico     -diff -text
 *.png     -diff -text

@@ -5,7 +5,13 @@ unit U_Npp_PreviewHTML;
 interface
 
 uses
-  SysUtils, Windows, IniFiles,
+{$ifdef FPC}
+  Interfaces,
+  LCLIntf,
+  LCLType,
+  Forms,
+{$endif}
+  SysUtils, Windows, Utf8IniFiles,
   NppPlugin,
   F_About, F_PreviewHTML;
 
@@ -16,8 +22,9 @@ const
 type
   TNppPluginPreviewHTML = class(TNppPlugin)
   private
-    FSettings: TIniFile;
+    FSettings: TUtf8IniFile;
     function Caption: nppString;
+    function UserAgentString: nppstring;
     function AddFuncItem(Name: nppString; Func: PFUNCPLUGINCMD; Checked: Boolean): Integer; overload;
     procedure AddFuncSeparator;
   public
@@ -26,16 +33,15 @@ type
     procedure SetInfo(NppData: TNppData); override;
 
     procedure CommandShowPreview;
-    procedure CommandSetIEVersion(const BrowserEmulation: Integer);
     procedure CommandOpenFile(const Filename: nppString);
     procedure CommandShowAbout;
 
     procedure DoNppnToolbarModification; override;
-    procedure DoNppnFileClosed(const BufferID: THandle); override;
-    procedure DoNppnBufferActivated(const BufferID: THandle); override;
+    procedure DoNppnFileClosed(const BufferID: NativeUInt); override;
+    procedure DoNppnBufferActivated(const BufferID: NativeUInt); override;
     procedure DoModified(const hwnd: HWND; const modificationType: Integer); override;
 
-    function  GetSettings(const Name: string = 'Settings.ini'): TIniFile;
+    function  GetSettings(const Name: WideString = 'Settings.ini'): TUtf8IniFile;
 
     property ConfigDir: nppString read GetPluginsConfigDir;
   end {TNppPluginPreviewHTML};
@@ -45,13 +51,6 @@ procedure _FuncOpenSettings; cdecl;
 procedure _FuncOpenFilters; cdecl;
 procedure _FuncShowAbout; cdecl;
 
-procedure _FuncSetIE7; cdecl;
-procedure _FuncSetIE8; cdecl;
-procedure _FuncSetIE9; cdecl;
-procedure _FuncSetIE10; cdecl;
-procedure _FuncSetIE11; cdecl;
-procedure _FuncSetIE12; cdecl;
-procedure _FuncSetIE13; cdecl;
 
 
 var
@@ -60,14 +59,24 @@ var
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 implementation
 uses
+  Classes,
   Graphics,
+{$ifndef FPC}
   Imaging.pngimage,
-  WebBrowser, Registry,
+{$endif}
+  uWVLoader,
+  uWVTypeLibrary,
   ModulePath,
+  VersionInfo,
   Debug;
 
+{$ifdef FPC}
+type
+  TPngImage = TPortableNetworkGraphic;
+{$else}
 var
   ToolbarBmp: TBitMap;
+{$endif}
 
 { ------------------------------------------------------------------------------------------------ }
 procedure _FuncOpenSettings; cdecl;
@@ -89,41 +98,6 @@ procedure _FuncShowPreview; cdecl;
 begin
   Npp.CommandShowPreview;
 end;
-{ ------------------------------------------------------------------------------------------------ }
-procedure _FuncSetIE7; cdecl;
-begin
-  Npp.CommandSetIEVersion(7000);
-end;
-{ ------------------------------------------------------------------------------------------------ }
-procedure _FuncSetIE8; cdecl;
-begin
-  Npp.CommandSetIEVersion(8000);
-end;
-{ ------------------------------------------------------------------------------------------------ }
-procedure _FuncSetIE9; cdecl;
-begin
-  Npp.CommandSetIEVersion(9000);
-end;
-{ ------------------------------------------------------------------------------------------------ }
-procedure _FuncSetIE10; cdecl;
-begin
-  Npp.CommandSetIEVersion(10000);
-end;
-{ ------------------------------------------------------------------------------------------------ }
-procedure _FuncSetIE11; cdecl;
-begin
-  Npp.CommandSetIEVersion(11000);
-end;
-{ ------------------------------------------------------------------------------------------------ }
-procedure _FuncSetIE12; cdecl;
-begin
-  Npp.CommandSetIEVersion(12000);
-end;
-{ ------------------------------------------------------------------------------------------------ }
-procedure _FuncSetIE13; cdecl;
-begin
-  Npp.CommandSetIEVersion(13000);
-end;
 
 
 { ================================================================================================ }
@@ -139,7 +113,22 @@ end {TNppPluginPreviewHTML.Create};
 { ------------------------------------------------------------------------------------------------ }
 function TNppPluginPreviewHTML.Caption: nppString;
 begin
-  Result := StringReplace(Self.PluginName, '&', '', []);
+  Result := {$ifdef FPC}UnicodeStringReplace{$else}StringReplace{$endif}(Self.PluginName, '&', '', []);
+end;
+
+{ ------------------------------------------------------------------------------------------------ }
+function TNppPluginPreviewHTML.UserAgentString: nppstring;
+var
+  NppVersion: Cardinal;
+begin
+  NppVersion := GetNppVersion;
+  with TFileVersionInfo.Create(TModulePath.DLLFullName) do begin
+    Result := WideFormat('%s/%d.%d.%d.%d (Notepad++ %d.%d %s)',
+      [Self.Caption, MajorVersion, MinorVersion, Revision, Build,
+      HiWord(NppVersion), LoWord(NppVersion),
+      {$ifdef CPUx64}'x64'{$else}'x86'{$endif}]);
+    Free;
+  end;
 end;
 
 { ------------------------------------------------------------------------------------------------ }
@@ -158,52 +147,39 @@ end;
 { ------------------------------------------------------------------------------------------------ }
 procedure TNppPluginPreviewHTML.SetInfo(NppData: TNppData);
 var
-  IEVersion: string;
-  MajorIEVersion, Code, EmulatedVersion: Integer;
+  UserDataDir: WideString;
   Psk: PShortcutKey;
 begin
   inherited;
 
   Psk := MakeShortcutKey(True, False, True, Ord('H'));   // Ctrl-Shift-H
   self.AddFuncItem('&Preview HTML', _FuncShowPreview, Psk);
-
-  IEVersion := GetIEVersion;
-  with GetSettings do begin
-    IEVersion := ReadString('Emulation', 'Installed IE version', IEVersion);
-    Free;
-  end;
-  Val(IEVersion, MajorIEVersion, Code);
-  if Code <= 1 then
-    MajorIEVersion := 0;
-
-  EmulatedVersion := GetBrowserEmulation div 1000;
-
-  if MajorIEVersion > 7 then begin
-    self.AddFuncSeparator;
-    self.AddFuncItem('View as IE&7', _FuncSetIE7, EmulatedVersion = 7);
-  end;
-
-  if MajorIEVersion >= 8 then
-    self.AddFuncItem('View as IE&8', _FuncSetIE8, EmulatedVersion = 8);
-  if MajorIEVersion >= 9 then
-    self.AddFuncItem('View as IE&9', _FuncSetIE9, EmulatedVersion = 9);
-  if MajorIEVersion >= 10 then
-    self.AddFuncItem('View as IE1&0', _FuncSetIE10, EmulatedVersion = 10);
-  if MajorIEVersion >= 11 then
-    self.AddFuncItem('View as IE1&1', _FuncSetIE11, EmulatedVersion = 11);
-  if MajorIEVersion >= 12 then
-    self.AddFuncItem('View as IE1&2', _FuncSetIE12, EmulatedVersion = 12);
-  if MajorIEVersion >= 13 then
-    self.AddFuncItem('View as IE1&3', _FuncSetIE13, EmulatedVersion = 13);
-
-  self.AddFuncSeparator;
-
   self.AddFuncItem('Edit &settings', _FuncOpenSettings);
   self.AddFuncItem('Edit &filter definitions', _FuncOpenFilters);
 
   self.AddFuncSeparator;
 
   self.AddFuncItem('&About', _FuncShowAbout);
+
+  UserDataDir := Npp.ConfigDir + '\PreviewHTML\WebView2Cache';
+
+  if not DirectoryExists(UserDataDir) then
+    CreateDir(UserDataDir);
+
+  try
+    GlobalWebView2Loader := TWVLoader.Create(nil);
+    with GlobalWebView2Loader do begin
+      UserDataFolder := UserDataDir;
+      UserAgent := UserAgentString;
+      EnableGPU := False;
+      AllowInsecureLocalhost := True;
+      AllowFileAccessFromFiles := True;
+      ScrollBarStyle := COREWEBVIEW2_SCROLLBAR_STYLE_FLUENT_OVERLAY;
+      StartWebView2;
+    end;
+  except
+    ShowException(ExceptObject, ExceptAddr);
+  end;
 end {TNppPluginPreviewHTML.SetInfo};
 
 { ------------------------------------------------------------------------------------------------ }
@@ -226,29 +202,16 @@ begin
     ShowException(ExceptObject, ExceptAddr);
   end;
 end {TNppPluginPreviewHTML.CommandOpenFilters};
-
-{ ------------------------------------------------------------------------------------------------ }
-procedure TNppPluginPreviewHTML.CommandSetIEVersion(const BrowserEmulation: Integer);
-begin
-  if GetBrowserEmulation <> BrowserEmulation then begin
-    SetBrowserEmulation(BrowserEmulation);
-    MessageBox(Npp.NppData.NppHandle,
-                PChar(Format('The preview browser mode has been set to correspond to Internet Explorer version %d.'#13#10#13#10 +
-                             'Please restart Notepad++ for the new browser mode to be taken into account.',
-                             [BrowserEmulation div 1000])),
-                PChar(Self.Caption), MB_ICONWARNING);
-  end else begin
-    MessageBox(Npp.NppData.NppHandle,
-                PChar(Format('The preview browser mode was already set to Internet Explorer version %d.',
-                             [BrowserEmulation div 1000])),
-                PChar(Self.Caption), MB_ICONINFORMATION);
-  end;
-end {TNppPluginPreviewHTML.CommandSetIEVersion};
-
 { ------------------------------------------------------------------------------------------------ }
 procedure TNppPluginPreviewHTML.CommandShowAbout;
+var
+  FrmParent: TComponent;
 begin
-  with TAboutForm.Create(self) do begin
+  FrmParent := Nil;
+  if Assigned(frmHTMLPreview) then
+    FrmParent := TComponent(frmHTMLPreview);
+  with TAboutForm.Create(FrmParent) do begin
+    Npp := Self;
     ShowModal;
     Free;
   end;
@@ -259,8 +222,17 @@ procedure TNppPluginPreviewHTML.CommandShowPreview;
 const
   ncDlgId = 0;
 begin
+  if GlobalWebView2Loader.InitializationError then begin
+    EnableMenuItem(GetMenu(NppData.nppHandle), CmdIdFromDlgId(ncDlgId),
+      MF_BYCOMMAND or MF_DISABLED or MF_GRAYED);
+    Exit;
+  end;
   if (not Assigned(frmHTMLPreview)) then begin
+{$ifdef FPC}
+    Application.CreateForm(TfrmHTMLPreview, frmHTMLPreview);
+{$else}
     frmHTMLPreview := TfrmHTMLPreview.Create(self);
+{$endif}
     frmHTMLPreview.Show(self, ncDlgId);
   end else begin
       frmHTMLPreview.Show
@@ -269,10 +241,10 @@ begin
 end {TNppPluginPreviewHTML.CommandShowPreview};
 
 { ------------------------------------------------------------------------------------------------ }
-function TNppPluginPreviewHTML.GetSettings(const Name: string): TIniFile;
+function TNppPluginPreviewHTML.GetSettings(const Name: WideString): TUtf8IniFile;
 begin
   ForceDirectories(ConfigDir + '\PreviewHTML');
-  Result := TIniFile.Create(ConfigDir + '\PreviewHTML\' + Name);
+  Result := TUtf8IniFile.Create(ConfigDir + '\PreviewHTML\' + Name);
 end {TNppPluginPreviewHTML.GetSettings};
 
 
@@ -289,7 +261,11 @@ var
 begin
   hHDC := hNil;
   bmpData := TPngImage.Create;
+{$ifdef FPC}
+  bmpData.HandleType := TBitmapHandleType.bmDDB;
+{$else}
   ToolbarBmp := TBitmap.Create;
+{$endif}
   try
     hHDC := GetDC(hNil);
     bmpX := MulDiv(16, GetDeviceCaps(hHDC, LOGPIXELSX), 96);
@@ -298,9 +274,13 @@ begin
     icoY := MulDiv(32, GetDeviceCaps(hHDC, LOGPIXELSY), 96);
     try
       bmpData.LoadFromResourceName(HInstance, 'TB_BMP_DATA');
+{$ifndef FPC}
       ToolbarBmp.Assign(bmpData);
       ToolbarBmp.PixelFormat := pf32bit;
       tb.ToolbarBmp := CopyImage(ToolbarBmp.Handle, IMAGE_BITMAP, bmpX, bmpY, LR_COPYRETURNORG);
+{$else}
+      tb.ToolbarBmp := CopyImage(bmpData.Handle, IMAGE_BITMAP, bmpX, bmpY, LR_COPYDELETEORG);
+{$endif}
     except
       tb.ToolbarBmp := LoadImage(Hinstance, 'TB_PREVIEW_HTML', IMAGE_BITMAP, bmpX, bmpY, 0);
     end;
@@ -323,7 +303,7 @@ begin
 end {TNppPluginPreviewHTML.DoNppnToolbarModification};
 
 { ------------------------------------------------------------------------------------------------ }
-procedure TNppPluginPreviewHTML.DoNppnBufferActivated(const BufferID: THandle);
+procedure TNppPluginPreviewHTML.DoNppnBufferActivated(const BufferID: NativeUInt);
 begin
   inherited;
   if Assigned(frmHTMLPreview) and frmHTMLPreview.Visible then begin
@@ -332,7 +312,7 @@ begin
 end {TNppPluginPreviewHTML.DoNppnBufferActivated};
 
 { ------------------------------------------------------------------------------------------------ }
-procedure TNppPluginPreviewHTML.DoNppnFileClosed(const BufferID: THandle);
+procedure TNppPluginPreviewHTML.DoNppnFileClosed(const BufferID: NativeUInt);
 begin
   if Assigned(frmHTMLPreview) then begin
     frmHTMLPreview.ForgetBuffer(BufferID);
@@ -353,6 +333,13 @@ end {TNppPluginPreviewHTML.DoModified};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 initialization
+{$ifdef FPC}
+  Application.CaptureExceptions := True;
+{$ifdef VER3_2}
+  Application.Scaled := True;
+{$endif}
+  Application.Initialize;
+{$endif}
   try
     Npp := TNppPluginPreviewHTML.Create;
   except
@@ -360,6 +347,8 @@ initialization
   end;
 
 finalization
+{$ifndef FPC}
   if Assigned(ToolbarBmp) then
     FreeAndNil(ToolbarBmp);
+{$endif}
 end.

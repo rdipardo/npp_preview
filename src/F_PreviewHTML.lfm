@@ -1,0 +1,96 @@
+inherited frmHTMLPreview: TfrmHTMLPreview
+  Left = 0
+  Top = 0
+  Caption = 'HTML preview'
+  ParentFont = True
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  OnHide = FormHide
+  OnKeyPress = FormKeyPress
+  OnShow = FormShow
+  object pnlButtons: TPanel[0]
+    Left = 0
+    Height = 56
+    Top = 184
+    Width = 320
+    Align = alBottom
+    BevelOuter = bvNone
+    ClientHeight = 56
+    ClientWidth = 320
+    ParentBackground = False
+    TabOrder = 1
+    object btnRefresh: TButton
+      Left = 8
+      Height = 25
+      Top = 6
+      Width = 75
+      Caption = '&Refresh'
+      TabOrder = 0
+      OnClick = btnRefreshClick
+    end
+    object btnClose: TButton
+      Left = 226
+      Height = 25
+      Top = 6
+      Width = 75
+      Anchors = [akTop, akRight]
+      Caption = 'Close'
+      TabOrder = 4
+      OnClick = btnCloseClick
+    end
+    object sbrIE: TStatusBar
+      Left = 0
+      Height = 36
+      Top = 20
+      Width = 320
+      Panels = <>
+    end
+    object btnAbout: TButton
+      Left = 188
+      Height = 25
+      Hint = 'About|About this plugin'
+      Top = 6
+      Width = 25
+      Anchors = [akTop, akRight]
+      Caption = '?'
+      TabOrder = 2
+      OnClick = btnAboutClick
+    end
+    object chkFreeze: TCheckBox
+      Left = 89
+      Height = 29
+      Top = 10
+      Width = 75
+      Caption = '&Freeze'
+      TabOrder = 1
+      OnClick = chkFreezeClick
+    end
+  end
+  object wbHost: TWVWindowParent[1]
+    Left = 0
+    Height = 184
+    Top = 0
+    Width = 320
+    Align = alClient
+    TabOrder = 0
+    Browser = wbIE
+  end
+  object wbIE: TWVBrowser[2]
+    DefaultURL = 'about:blank'
+    TargetCompatibleBrowserVersion = '95.0.1020.44'
+    AllowSingleSignOnUsingOSPrimaryAccount = False
+    OnInitializationError = wbIEInitializationError
+    OnAfterCreated = wbIEAfterCreated
+    OnDocumentTitleChanged = wbIETitleChange
+    OnStatusBarTextChanged = wbIEStatusBar
+    OnExecuteScriptWithResultCompleted = wbIEExecuteScriptWithResultCompleted
+    Left = 8
+    Top = 8
+  end
+  object tmrAutorefresh: TTimer[3]
+    Enabled = False
+    OnTimer = tmrAutorefreshTimer
+    Left = 448
+    Top = 16
+  end
+end

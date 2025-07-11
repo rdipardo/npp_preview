@@ -30,6 +30,7 @@ uses
   WebBrowser in '..\common\WebBrowser.pas',
   VersionInfo in '..\lib\Source\Units\Common\VersionInfo.pas',
   ModulePath in '..\lib\Source\Units\Common\ModulePath.pas',
+  Utf8IniFiles in '..\lib\Source\Units\Common\Utf8IniFiles.pas',
   RegExpr in '..\common\RegExpr.pas',
   U_CustomFilter in '..\U_CustomFilter.pas',
   Debug;

@@ -1,13 +1,26 @@
 ﻿unit F_PreviewHTML;
 
+{$ifdef FPC}{$unitpath common}{$endif}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 interface
 
 uses
+{$ifdef FPC}
+  Interfaces,
+  LCLIntf,
+  LCLType,
+{$endif}
   Windows, Messages, SysUtils, Classes, Variants, Graphics, Controls, Forms, Generics.Collections,
-  Dialogs, StdCtrls, SHDocVw, OleCtrls, ComCtrls, ExtCtrls, IniFiles,
+  Dialogs, StdCtrls, ComCtrls, ExtCtrls, Utf8IniFiles,
   NppPlugin, NppDockingForms,
-  WebBrowser,
+  uWVBrowserBase,
+  uWVBrowser,
+  uWVWindowParent,
+  uWVLoader,
+  uWVTypes,
+  uWVTypeLibrary,
+  uWVCoreWebView2ExecuteScriptResult,
   customstreams,
   U_CustomFilter;
 
@@ -15,13 +28,12 @@ type
   TBufferID = NativeInt;
 
   TfrmHTMLPreview = class(TNppDockingForm)
-    wbIE: TWebBrowser;
+    wbHost: TWVWindowParent;
+    wbIE: TWVBrowser;
     pnlButtons: TPanel;
     btnRefresh: TButton;
     btnClose: TButton;
     sbrIE: TStatusBar;
-    pnlPreview: TPanel;
-    pnlHTML: TPanel;
     btnAbout: TButton;
     tmrAutorefresh: TTimer;
     chkFreeze: TCheckBox;
@@ -33,34 +45,31 @@ type
     procedure FormFloat(Sender: TObject);
     procedure FormDock(Sender: TObject);
     procedure FormShow(Sender: TObject);
-    procedure wbIETitleChange(ASender: TObject; const Text: WideString);
-    procedure wbIEBeforeNavigate2(ASender: TObject; const pDisp: IDispatch; const URL, Flags,
-      TargetFrameName, PostData, Headers: OleVariant; var Cancel: WordBool);
-    procedure wbIENewWindow3(ASender: TObject; var ppDisp: IDispatch; var Cancel: WordBool;
-      dwFlags: Cardinal; const bstrUrlContext, bstrUrl: WideString);
-    procedure wbIEStatusTextChange(ASender: TObject; const Text: WideString);
-    procedure wbIEStatusBar(ASender: TObject; StatusBar: WordBool);
+    procedure wbIEAfterCreated({%H-}ASender: TObject);
+    procedure wbIETitleChange({%H-}ASender: TObject);
+    procedure wbIEStatusTextChange({%H-}ASender: TObject; const Text: WideString);
+    procedure wbIEStatusBar({%H-}ASender: TObject; {%H-}const aWebView: ICoreWebView2);
+    procedure wbIEExecuteScriptWithResultCompleted({%H-}Sender: TObject; {%H-}ErrorCode: HResult;
+      const AResult: ICoreWebView2ExecuteScriptResult; ExecutionID: integer);
     procedure btnCloseStatusbarClick(Sender: TObject);
     procedure btnAboutClick(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure tmrAutorefreshTimer(Sender: TObject);
     procedure chkFreezeClick(Sender: TObject);
-    procedure wbIEDocumentComplete(ASender: TObject; const pDisp: IDispatch; const URL: OleVariant);
+    procedure wbIEInitializationError({%H-}ASender: TObject; ErrorCode: HRESULT; const ErrorMessage: wvstring);
   private
     { Private declarations }
     FBufferID: TBufferID;
     FScrollPositions: TDictionary<TBufferID,TPoint>;
     FFilterThread: TCustomFilterThread;
-    FScrollTop: Integer;
-    FScrollLeft: Integer;
     FEnsureRendered: Boolean;
 
     procedure SaveScrollPos;
     procedure RestoreScrollPos(const BufferID: TBufferID);
 
     function  DetermineCustomFilter: string;
-    function  ExecuteCustomFilter(const FilterName, HTML: string; const BufferID: TBufferID): Boolean;
-    function  TransformXMLToHTML(const XML: WideString): string;
+    function  ExecuteCustomFilter(const FilterName: string; const HTML: wvstring; const BufferID: TBufferID): Boolean;
+    function  TransformXMLToHTML(const XML: WideString): WideString;
 
     procedure FilterThreadTerminate(Sender: TObject);
   public
@@ -71,6 +80,12 @@ type
     procedure ResetTimer;
     procedure ForgetBuffer(const BufferID: TBufferID);
     procedure DisplayPreview(const BufferID: TBufferID);
+  protected
+    procedure WMMove({%H-}var AMessage : TWMMove); message WM_MOVE;
+    procedure WMMoving({%H-}var AMessage : TMessage); message WM_MOVING;
+{$ifdef FPC}
+    procedure HandleCloseQuery({%H-}Sender: TObject; {%H-}var CanClose: Boolean); override;
+{$endif}
   end;
 
 var
@@ -80,11 +95,21 @@ var
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 implementation
 uses
-  ShellAPI, ComObj, StrUtils, IOUtils, Masks, MSHTML,
+  ComObj, StrUtils, Masks,
   RegExpr,
   Registry,
   Debug,
   U_Npp_PreviewHTML;
+
+const
+  APP_DOMAIN = 'preview.host';
+  RESTORE_SCRIPT_ID = $7F;
+  PLACEHOLDER_CONTENT =
+    '<html>' +
+    ' <body style="background:#ececec;color:#999">' +
+    '   <p align="center" style="margin:14em 0">(no preview available)</p>' +
+    ' </body>' +
+    '</html>';
 
 procedure PreviewRefreshTimer(WndHandle: HWND; Msg: UINT; EventID: UINT; TimeMS: UINT); stdcall;
 begin
@@ -95,14 +120,17 @@ begin
   end;
 end;
 
+{$ifdef FPC}
+{$R *.lfm}
+{$else}
 {$R *.dfm}
+{$endif}
 
 { ================================================================================================ }
 
 constructor TfrmHTMLPreview.Create(AOwner: TComponent);
 begin
   inherited;
-  self.Icon := TIcon.Create;
   self.Icon.Handle := LoadImage(Hinstance, 'TB_PREVIEW_HTML_ICO', IMAGE_ICON, 0, 0, (LR_DEFAULTSIZE or LR_LOADTRANSPARENT));
   self.NppDefaultDockingMask := (DWS_DF_CONT_RIGHT or DWS_USEOWNDARKMODE);
 end;
@@ -124,9 +152,12 @@ begin
   self.OnDock := self.FormDock;
   inherited;
   FBufferID := -1;
-  with TNppPluginPreviewHTML(Npp).GetSettings() do begin
-    tmrAutorefresh.Interval := ReadInteger('Autorefresh', 'Interval', tmrAutorefresh.Interval);
-    Free;
+  ContentStream.Text := PLACEHOLDER_CONTENT;
+  if GlobalWebView2Loader.InitializationError then
+    MessageBoxW(0, @GlobalWebView2Loader.ErrorMessage[1], nil, MB_ICONERROR)
+  else begin
+    if GlobalWebView2Loader.Initialized then
+      wbIE.CreateBrowser(wbHost.Handle);
   end;
 end {TfrmHTMLPreview.FormCreate};
 { ------------------------------------------------------------------------------------------------ }
@@ -134,7 +165,7 @@ procedure TfrmHTMLPreview.FormDestroy(Sender: TObject);
 begin
   FreeAndNil(FScrollPositions);
   FreeAndNil(FFilterThread);
-  FreeAndNil(Icon);
+  WbHost.Browser.CoreWebView2Controller.Close;
   inherited;
 end {TfrmHTMLPreview.FormDestroy};
 
@@ -172,6 +203,7 @@ begin
 ODS('FreeAndNil(FFilterThread);');
     FreeAndNil(FFilterThread);
     SaveScrollPos;
+    ContentStream.Text := PLACEHOLDER_CONTENT;
 
     BufferID := SendMessage(Self.Npp.NppData.NppHandle, NPPM_GETCURRENTBUFFERID, 0, 0);
     hScintilla := Npp.CurrentScintilla;
@@ -200,11 +232,11 @@ ODS('FreeAndNil(FFilterThread);');
       HTML := ContentStream.Text;
       if IsCustom then begin
 //MessageBox(Npp.NppData.NppHandle, PChar(Format('FilterName: %s', [FilterName])), 'PreviewHTML', MB_ICONINFORMATION);
-        wbIEStatusTextChange(wbIE, Format('Running filter %s...', [FilterName]));
+        wbIEStatusTextChange(wbIE, WideFormat('Running filter %s...', [FilterName]));
         if ExecuteCustomFilter(FilterName, HTML, BufferID) then begin
           Exit;
         end else begin
-          wbIEStatusTextChange(wbIE, Format('Failed filter %s...', [FilterName]));
+          wbIEStatusTextChange(wbIE, WideFormat('Failed filter %s...', [FilterName]));
           ContentStream.Text := '<pre style="color: darkred">ExecuteCustomFilter returned False</pre>';
         end;
       end else if IsXML then begin
@@ -243,12 +275,11 @@ var
   hScintilla: THandle;
 begin
   try
-    IsHTML := not ContentStream.Empty;
-    pnlHTML.Visible := IsHTML;
+    IsHTML := not WideSameText(ContentStream.Text, PLACEHOLDER_CONTENT);
     sbrIE.Visible := IsHTML and (Length(sbrIE.SimpleText) > 0);
     if IsHTML then begin
       HTML := ContentStream.Text;
-ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy(HTML, 1, 10), #13#10, '', [rfReplaceAll]), Length(HTML), BufferID]);
+ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy({$ifdef FPC}UTF8Encode{$endif}(HTML), 1, 10), #13#10, '', [rfReplaceAll]), Length(HTML), BufferID]);
       Size := SendMessage(Self.Npp.NppData.NppHandle, NPPM_GETFULLPATHFROMBUFFERID, BufferID, LPARAM(nil));
       SetLength(Filename, Size);
       SetLength(Filename, SendMessage(Self.Npp.NppData.NppHandle, NPPM_GETFULLPATHFROMBUFFERID, BufferID, LPARAM(nppPChar(Filename))));
@@ -258,20 +289,15 @@ ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy(HTML, 1,
           Inc(HeadStart, 6)
         else
           HeadStart := 1;
-        Insert('<base href="' + Filename + '" />', HTML, HeadStart);
+        Insert('<base href="' + WideFormat('https://%s/%s', [APP_DOMAIN, ExtractFileName(Filename)]) + '" />', HTML, HeadStart);
+        wbIE.SetVirtualHostNameToFolderMapping(APP_DOMAIN, ExtractFileDir(Filename), COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW);
         ContentStream.Text := HTML;
       end;
 
-      wbIE.LoadDocFromString(ContentStream.Text);
       if FEnsureRendered then begin
         ResetTimer;
         FEnsureRendered := False;
       end;
-
-      if wbIE.GetDocument <> nil then
-        self.UpdateDisplayInfo(wbIE.GetDocument.title)
-      else
-        self.UpdateDisplayInfo('');
 
       {--- 2013-01-26 Martijn: the WebBrowser control has a tendency to steal the focus. We'll let
                                   the editor take it back. ---}
@@ -281,14 +307,10 @@ ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy(HTML, 1,
       self.UpdateDisplayInfo('');
     end;
 
-    if pnlHTML.Visible then begin
-      Self.AlphaBlend := False;
-    end else begin
-      Self.AlphaBlend := True;
-      Self.AlphaBlendValue := 127;
-    end;
+    wbIE.NavigateToString(ContentStream.Text);
 
-    RestoreScrollPos(BufferID);
+    if IsHTML then
+      RestoreScrollPos(BufferID);
   except
     on E: Exception do begin
 ODS('DisplayPreview ### %s: %s', [E.ClassName, StringReplace(E.Message, sLineBreak, '', [rfReplaceAll])]);
@@ -299,48 +321,81 @@ ODS('DisplayPreview ### %s: %s', [E.ClassName, StringReplace(E.Message, sLineBre
 end {TfrmHTMLPreview.DisplayPreview};
 
 { ------------------------------------------------------------------------------------------------ }
-procedure TfrmHTMLPreview.SaveScrollPos;
+procedure TfrmHTMLPreview.wbIEExecuteScriptWithResultCompleted(Sender: TObject; ErrorCode: HResult;
+  const AResult: ICoreWebView2ExecuteScriptResult; ExecutionID : integer);
 var
-  docEl: IHTMLElement2;
   P: TPoint;
+  JSResult: TCoreWebView2ExecuteScriptResult;
+  JSResultString: wvstring;
+  JSIntValue, ParseResult: LongInt;
+  IsStringResult: boolean;
 begin
-  FScrollTop := -1;
-  FScrollLeft := -1;
+  JSResultString := '';
+  JSIntValue := -1;
+  JSResult := TCoreWebView2ExecuteScriptResult.Create(aResult);
+  try
+    if JSResult.Initialized and JSResult.Succeeded_ then
+    begin
+      if JSResult.TryGetResultAsString(JSResultString, IsStringResult) then
+      begin
+        if ExecutionID = RESTORE_SCRIPT_ID then
+          ODS('RestoreScrollPos: done!')
+        else
+        if IsStringResult then
+        begin
+          Val (JSResultString, JSIntValue, ParseResult);
+          if (ParseResult = 0) and (JSIntValue > -1) then
+          begin
+            P.Y := JSIntValue shr 11;
+            P.X := JSIntValue and $000007ff;
+            FScrollPositions.AddOrSetValue(FBufferID, P);
+            ODS('SaveScrollPos[%x]: %dx%d', [FBufferID, P.X, P.Y]);
+          end else
+          begin
+            FScrollPositions.Remove(FBufferID);
+            ODS('SaveScrollPos[%x]: --', [FBufferID]);
+          end;
+        end;
+      end;
+    end;
+  finally
+    JSResult.Free
+  end;
+end;
+
+{ ------------------------------------------------------------------------------------------------ }
+procedure TfrmHTMLPreview.SaveScrollPos;
+const
+  JS = '(() => {' +
+        'let doc = Array.prototype.slice.call(document.getElementsByTagName("html"))[0];' +
+        'return (doc) ? `${(parseInt(doc.scrollTop) << 11) | parseInt(doc.scrollLeft)}` : `${-1}`;' +
+    '})();';
+begin
   if FBufferID = -1 then
     Exit;
 
-  if Assigned(wbIE.Document) and Assigned((wbIE.Document as IHTMLDocument3).documentElement) then begin
-    docEl := (wbIE.Document as IHTMLDocument3).documentElement AS IHTMLElement2;
-    P.Y := docEl.scrollTop;
-    P.X := docEl.scrollLeft;
-    FScrollPositions.AddOrSetValue(FBufferID, P);
-    ODS('SaveScrollPos[%x]: %dx%d', [FBufferID, P.X, P.Y]);
-  end else begin
-    FScrollPositions.Remove(FBufferID);
-    ODS('SaveScrollPos[%x]: --', [FBufferID]);
-  end;
+  if (wbIE <> nil) then
+    wbIE.ExecuteScriptWithResult(JS);
 end {TfrmHTMLPreview.SaveScrollPos};
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TfrmHTMLPreview.RestoreScrollPos(const BufferID: TBufferID);
+const
+  JS = '((left, top) => {' +
+      'let doc = Array.prototype.slice.call(document.getElementsByTagName("html"))[0];' +
+      'if (doc) { doc.scroll(left, top); }' +
+    '})(%d,%d);';
 var
   P: TPoint;
-  docEl: IHTMLElement2;
 begin
   {--- MCO 22-01-2013: Look up this buffer's scroll position; if we know one, wait for the page
                           to finish loading, then restore the scroll position. ---}
-  if FScrollPositions.TryGetValue(BufferID, P) then begin
-    FScrollTop := P.Y;
-    FScrollLeft := P.X;
-    ODS('RestoreScrollPos[%x]: %dx%d', [BufferID, P.X, P.Y]);
-    if (FScrollTop <> -1) and Assigned(wbIE.Document) and Assigned((wbIE.Document as IHTMLDocument3).documentElement) then begin
-      docEl := (wbIE.Document as IHTMLDocument3).documentElement as IHTMLElement2;
-      docEl.scrollTop := FScrollTop;
-      docEl.scrollLeft := FScrollLeft;
-      ODS('RestoreScrollPos: done!');
-    end;
+  if FScrollPositions.TryGetValue(FBufferID, P) then begin
+    ODS('RestoreScrollPos[%x]: %dx%d', [FBufferID, P.X, P.Y]);
+    if (wbIE <> nil) then
+      wbIE.ExecuteScriptWithResult(WideFormat(JS, [P.X, P.Y]), RESTORE_SCRIPT_ID);
   end else begin
-    ODS('RestoreScrollPos[%x]: --', [BufferID]);
+    ODS('RestoreScrollPos[%x]: --', [FBufferID]);
   end;
   FBufferID := BufferID;
 end {TfrmHTMLPreview.RestoreScrollPos};
@@ -353,7 +408,6 @@ begin
   if Assigned(FScrollPositions) then begin
     FScrollPositions.Remove(BufferID);
   end;
-  ContentStream.Clear;
   ResetTimer;
 end {TfrmHTMLPreview.ForgetBuffer};
 
@@ -368,7 +422,7 @@ end {TfrmHTMLPreview.ResetTimer};
 function TfrmHTMLPreview.DetermineCustomFilter: string;
 var
   DocFileName: nppString;
-  Filters: TIniFile;
+  Filters: TUtf8IniFile;
   Names: TStringList;
   i: Integer;
   Match: Boolean;
@@ -384,7 +438,7 @@ begin
   Result := String.Empty;
 
   ForceDirectories(TNppPluginPreviewHTML(Npp).ConfigDir + '\PreviewHTML');
-  Filters := TIniFile.Create(TNppPluginPreviewHTML(Npp).ConfigDir + '\PreviewHTML\Filters.ini');
+  Filters := TUtf8IniFile.Create(TNppPluginPreviewHTML(Npp).ConfigDir + '\PreviewHTML\Filters.ini');
   Names := TStringList.Create;
   try
     Filters.ReadSections(Names);
@@ -400,7 +454,7 @@ begin
       Filespec := Trim(Filters.ReadString(Names[i], 'Filename', ''));
       if (Filespec <> '') then begin
         // http://docwiki.embarcadero.com/Libraries/XE2/en/System.Masks.MatchesMask#Description
-        Match := Match or MatchesMask(ExtractFileName(DocFileName), Filespec);
+        Match := Match or MatchesMask({$ifdef FPC}UTF8Encode{$endif}(ExtractFileName(DocFileName)), Filespec);
       end;
 
       {--- MCO 22-01-2013: Test extension ---}
@@ -411,7 +465,7 @@ begin
           Extensions.CaseSensitive := False;
           Extensions.Delimiter := ',';
           Extensions.DelimitedText := Ext;
-          Match := Match or (Extensions.IndexOf(ExtractFileExt(DocFileName)) > -1);
+          Match := Match or (Extensions.IndexOf({$ifdef FPC}UTF8Encode{$endif}(ExtractFileExt(DocFileName))) > -1);
         finally
           Extensions.Free;
         end;
@@ -450,12 +504,12 @@ begin
 end {TfrmHTMLPreview.DetermineCustomFilter};
 
 { ------------------------------------------------------------------------------------------------ }
-function TfrmHTMLPreview.ExecuteCustomFilter(const FilterName, HTML: string; const BufferID: TBufferID): Boolean;
+function TfrmHTMLPreview.ExecuteCustomFilter(const FilterName: string; const HTML: wvstring; const BufferID: TBufferID): Boolean;
 var
   FilterData: TFilterData;
   DocFile: TFileName;
   hScintilla: THandle;
-  Filters: TIniFile;
+  Filters: TUtf8IniFile;
   BufferEncoding: NativeInt;
 begin
   FilterData.Name := FilterName;
@@ -556,13 +610,19 @@ end;
 procedure TfrmHTMLPreview.FormShow(Sender: TObject);
 begin
   inherited;
+  with TNppPluginPreviewHTML(Npp).GetSettings() do begin
+    tmrAutorefresh.Interval := ReadInteger('Autorefresh', 'Interval', tmrAutorefresh.Interval);
+    Free;
+  end;
   SendMessage(self.Npp.NppData.NppHandle, NPPM_SETMENUITEMCHECK, self.CmdID, 1);
+  if wbIE.IsSuspended then
+    wbIE.Resume;
   FEnsureRendered := True;
   ResetTimer;
 end;
 
 { ------------------------------------------------------------------------------------------------ }
-function TfrmHTMLPreview.TransformXMLToHTML(const XML: WideString): string;
+function TfrmHTMLPreview.TransformXMLToHTML(const XML: WideString): WideString;
   { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
   function CreateDOMDocument: OleVariant;
   var
@@ -613,7 +673,7 @@ var
   xDoc, xPI, xStylesheet, xOutput: OleVariant;
   rexHref: TRegExpr;
 begin
-  Result := '';
+  Result := PLACEHOLDER_CONTENT;
   try
     try
       {--- MCO 30-05-2012: Check to see if there's an xml-stylesheet to convert the XML to HTML. ---}
@@ -663,73 +723,70 @@ begin
 end {TfrmHTMLPreview.TransformXMLToHTML};
 
 { ------------------------------------------------------------------------------------------------ }
-procedure TfrmHTMLPreview.wbIEBeforeNavigate2(ASender: TObject; const pDisp: IDispatch; const URL,
-  Flags, TargetFrameName, PostData, Headers: OleVariant; var Cancel: WordBool);
-var
-  Handle: HWND;
+procedure TfrmHTMLPreview.wbIEStatusBar(ASender: TObject; const aWebView: ICoreWebView2);
 begin
-  if not SameText(URL, 'about:blank') and not StartsText('javascript:', URL) then begin
-    if Assigned(Npp) then
-      Handle := Npp.NppData.NppHandle
-    else
-      Handle := 0;
-    ShellExecute(Handle, nil, PChar(VarToStr(URL)), nil, nil, SW_SHOWDEFAULT);
-    Cancel := True;
-  end;
-end;
-
-{ ------------------------------------------------------------------------------------------------ }
-procedure TfrmHTMLPreview.wbIEDocumentComplete(ASender: TObject; const pDisp: IDispatch;
-  const URL: OleVariant);
-var
-  docEl: IHTMLElement2;
-begin
-  if (FScrollTop <> -1) and Assigned(wbIE.Document) and Assigned((wbIE.Document as IHTMLDocument3).documentElement) then begin
-    docEl := (wbIE.Document as IHTMLDocument3).documentElement as IHTMLElement2;
-    docEl.scrollTop := FScrollTop;
-    docEl.scrollLeft := FScrollLeft;
-    FScrollTop := -1;
-    FScrollLeft := -1;
-  end;
-end {TfrmHTMLPreview.wbIEDocumentComplete};
-
-{ ------------------------------------------------------------------------------------------------ }
-procedure TfrmHTMLPreview.wbIENewWindow3(ASender: TObject; var ppDisp: IDispatch;
-  var Cancel: WordBool; dwFlags: Cardinal; const bstrUrlContext, bstrUrl: WideString);
-var
-  Handle: HWND;
-begin
-  if not SameText(bstrUrl, 'about:blank') and not StartsText('javascript:', bstrURL) then begin
-    if Assigned(Npp)  then
-      Handle := Npp.NppData.NppHandle
-    else
-      Handle := 0;
-    ShellExecute(Handle, nil, PChar(bstrUrl), nil, nil, SW_SHOWDEFAULT);
-  end;
-  Cancel := True;
-end;
-
-{ ------------------------------------------------------------------------------------------------ }
-procedure TfrmHTMLPreview.wbIEStatusBar(ASender: TObject; StatusBar: WordBool);
-begin
-  sbrIE.Visible := StatusBar;
+  wbIEStatusTextChange(ASender, TWVBrowser(ASender).StatusBarText);
 end;
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TfrmHTMLPreview.wbIEStatusTextChange(ASender: TObject; const Text: WideString);
 begin
-  sbrIE.SimpleText := Text;
+  sbrIE.SimpleText := {$ifdef FPC}UTf8Encode{$endif}(Text);
   sbrIE.Visible := Length(Text) > 0;
   if sbrIE.Visible then
   sbrIE.Invalidate;
 end;
 
 { ------------------------------------------------------------------------------------------------ }
-procedure TfrmHTMLPreview.wbIETitleChange(ASender: TObject; const Text: WideString);
+procedure TfrmHTMLPreview.wbIETitleChange(ASender: TObject);
 begin
   inherited;
-  self.UpdateDisplayInfo(StringReplace(Text, 'about:blank', '', [rfReplaceAll]));
+  self.UpdateDisplayInfo({$ifdef FPC}UTF8Encode{$endif}(wbIE.DocumentTitle));
 end;
+
+{ ------------------------------------------------------------------------------------------------ }
+procedure TfrmHTMLPreview.wbIEInitializationError(ASender: TObject;
+  ErrorCode: HRESULT; const ErrorMessage: wvstring);
+begin
+  MessageBoxW(0, @ErrorMessage[1], PWChar(WideFormat('Error: %d', [ErrorCode])), MB_ICONERROR);
+end;
+
+{ ------------------------------------------------------------------------------------------------ }
+procedure TfrmHTMLPreview.wbIEAfterCreated(ASender: TObject);
+begin
+  wbHost.UpdateSize;
+  // wbHost.SetFocus; //< will hang on float!
+  PrevTimerID := SetTimer(Handle, 0, 800, @PreviewRefreshTimer);
+end;
+
+procedure TfrmHTMLPreview.WMMove(var AMessage : TWMMove);
+var
+  M: TMessage;
+begin
+  inherited;
+  with M do
+  begin
+    Msg := AMessage.Msg;
+    lParamlo := AMessage.XPos;
+    lParamhi := AMessage.YPos;
+  end;
+  WMMoving(M);
+end;
+
+procedure TfrmHTMLPreview.WMMoving(var AMessage : TMessage);
+begin
+  inherited;
+  if (wbIE <> nil) then
+    wbIE.NotifyParentWindowPositionChanged;
+end;
+
+{$ifdef FPC}
+procedure TfrmHTMLPreview.HandleCloseQuery(Sender: TObject; var CanClose: Boolean);
+begin
+  wbIE.TrySuspend;
+  inherited;
+end;
+{$endif}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 initialization

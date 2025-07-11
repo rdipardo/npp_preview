@@ -1,15 +1,21 @@
 ﻿unit U_CustomFilter;
 
+{$ifdef FPC}{$mode delphiunicode}{$endif}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 interface
 uses
   Classes, Windows, SysUtils;
 
 type
+{$ifdef FPC}
+  TFileName = UnicodeString;
+{$endif}
+
   {--- 2013-01-26 Martijn: TFilterData contains all the information needed for the filter to do its
                             job (in a different thread, so the filter processing becomes thread-safe). ---}
   TFilterData = record
-    Name: string;
+    Name: {$ifdef FPC} Ansistring {$else} string {$endif};
     DocFile: TFileName;
     BufferID: NativeInt;
     Contents: string;
@@ -25,6 +31,7 @@ type
   private
     FData: TFilterData;
     function Run(const Command, WorkingDir: string; const Input, Output, Error: TStream): NativeInt;
+    procedure DoSynchronize;
   public
     constructor Create(const Data: TFilterData); reintroduce;
     destructor  Destroy; override;
@@ -36,8 +43,12 @@ type
 implementation
 
 uses
-  IOUtils,
   process, Pipes,
+{$ifndef FPC}
+  IOUtils
+{$else}
+  ProcessUnicode
+{$endif},
   Debug,
   F_PreviewHTML;
 
@@ -48,7 +59,7 @@ constructor TCustomFilterThread.Create(const Data: TFilterData);
 begin
   FData := Data;
   Self.OnTerminate := Data.OnTerminate;
-  inherited Create;
+  inherited Create(False);
 end {TCustomFilter.Create};
 
 { ------------------------------------------------------------------------------------------------ }
@@ -71,6 +82,8 @@ var
   InputMethod: TContentInputType;
   OutputMethod: TContentOutputType;
   Input, Output, Error: TStringStream;
+  hIniFile, hOutFile: THandle;
+  sIniFile, sOutFile: THandleStream;
 //  i: Integer;
 begin
 //ODS('Data.FilterInfo.Count = "%d"', [FData.FilterInfo.Count]);
@@ -78,7 +91,7 @@ begin
 //  ODS('Data.FilterInfo[%d] = "%s"', [i, FData.FilterInfo.Strings[i]]);
 //end;
   try
-    Command := FData.FilterInfo.Values['Command'];
+    Command := {$ifdef FPC}UTF8ToString{$endif}(FData.FilterInfo.Values['Command']);
 //ODS('Command: "%s"', [Command]);
     if Command = '' then begin
       HTML := FData.Contents;
@@ -112,13 +125,13 @@ begin
         {$MESSAGE HINT 'TODO: warn the user that this filter is misconfigured — Martijn 2013-01-26'}
       end;
       if OutputMethod = cotOutputFile then
-        OutFile := TPath.GetTempFileName
+        OutFile := {$ifndef FPC}TPath.GetTempFileName{$else}UTF8toString(GetTempFileName){$endif}
       else
         OutFile := '';
     end else begin // ContentInput = citFile
       Input := nil;
       if FData.Modified or (OutputMethod = cotInputFile) then begin
-        TempFile := TPath.GetTempFileName;
+        TempFile := {$ifndef FPC}TPath.GetTempFileName{$else}UTF8toString(GetTempFileName){$endif};
         // rename the TempFile so it has the proper extension
         InFile := ChangeFileExt(TempFile, ExtractFileExt(FData.DocFile));
         if not RenameFile(TempFile, InFile) then
@@ -126,7 +139,13 @@ begin
         // Save the contents to the input file
         SS := TStringStream.Create(FData.Contents, FData.Encoding, False);
         try
-          SS.SaveToFile(InFile);
+          hIniFile := FileCreate(InFile);
+          if (hIniFile <> THandle(-1)) then begin
+            sIniFile := THandleStream.Create(hIniFile);
+            SS.SaveToStream(sIniFile);
+            FileClose(sIniFile.Handle);
+            sIniFile.Free;
+          end;
         finally
           SS.Free;
         end;
@@ -136,7 +155,7 @@ begin
       end;
       case OutputMethod of
         cotInputFile:   OutFile := InFile;
-        cotOutputFile:  OutFile := TPath.GetTempFileName;
+        cotOutputFile:  OutFile := {$ifndef FPC}TPath.GetTempFileName{$else}UTF8toString(GetTempFileName){$endif};
       end;
     end;
 
@@ -149,8 +168,8 @@ begin
       WorkingDir := ExtractFilePath(InFile);
 
     // Perform replacements in the command string
-    Command := StringReplace(Command, '%1', InFile, [rfReplaceAll]);
-    Command := StringReplace(Command, '%2', OutFile, [rfReplaceAll]);
+    Command := {$ifdef FPC}UnicodeStringReplace{$else}StringReplace{$endif}(Command, '%1', InFile, [rfReplaceAll]);
+    Command := {$ifdef FPC}UnicodeStringReplace{$else}StringReplace{$endif}(Command, '%2', OutFile, [rfReplaceAll]);
     // TODO: also replace environment strings?
 
     if OutFile = '' then begin
@@ -171,15 +190,25 @@ ODS('Command="%s"; WorkingDir="%s"; InFile="%s"; OutFile="%s"', [Command, Workin
       case OutputMethod of
         cotStandardOutput: begin
           // read the output from the process's standard output stream
-          HTML := TStringStream(Output).DataString;
+          HTML := TStringStream(Output).{$ifdef FPC}UnicodeDataString{$else}DataString{$endif};
           if Length(HTML) = 0 then
-            HTML := '<pre style="color: darkred">' + StringReplace(Error.DataString, '<', '&lt;', [rfReplaceAll]) + '</pre>';
+            HTML := '<pre style="color: darkred">' +
+                {$ifdef FPC}UnicodeStringReplace{$else}StringReplace{$endif}(
+                  Error.{$ifdef FPC}UnicodeDataString{$else}DataString{$endif},
+                  '<', '&lt;', [rfReplaceAll]) +
+                '</pre>';
         end;
         cotInputFile, cotOutputFile: begin
           SS := TStringStream.Create('', FData.Encoding, False);
           try
-            SS.LoadFromFile(OutFile);
-            HTML := SS.DataString;
+            hOutFile := FileOpen(OutFile, fmOpenReadWrite or fmShareExclusive);
+            if (hOutFile <> THandle(-1)) then begin
+              sOutFile := THandleStream.Create(hOutFile);
+              SS.LoadFromStream(sOutFile);
+              FileClose(sOutFile.Handle);
+              sOutFile.Free;
+            end;
+            HTML := SS.{$ifdef FPC}UnicodeDataString{$else}DataString{$endif};
           finally
             SS.Free;
           end;
@@ -195,19 +224,15 @@ ODS('Command="%s"; WorkingDir="%s"; InFile="%s"; OutFile="%s"', [Command, Workin
           the main thread. ---}
     if not Terminated then begin
 ODS('About to synchronize HTML of length %d in thread ID [%x]', [Length(HTML), GetCurrentThreadID]);
-      Synchronize(procedure
-                  begin
-ODS('Synchronizing HTML of length %d in thread ID [%x]', [Length(HTML), GetCurrentThreadID]);
-                    ContentStream.Text := HTML;
-                    frmHTMLPreview.DisplayPreview(FData.BufferID);
-                  end);
+      ContentStream.Text := HTML;
+      Synchronize(DoSynchronize);
     end;
 
 ODS('Cleaning up...');
     // Delete the temporary files
-    if (InFile <> '') and not SameFileName(FData.DocFile, OutFile) then
+    if (InFile <> '') and not WideSameText(FData.DocFile, OutFile) then
       DeleteFile(OutFile);
-    if (InFile <> '') and not SameFileName(InFile, FData.DocFile) then
+    if (InFile <> '') and not WideSameText(InFile, FData.DocFile) then
       DeleteFile(InFile);
   end;
 end {TCustomFilter.Execute};
@@ -308,5 +333,11 @@ begin
     EMS.Free;
   end;
 end {TCustomFilterThread.Run};
+
+procedure TCustomFilterThread.DoSynchronize;
+begin
+ODS('Synchronizing HTML of length %d in thread ID [%x]', [Length(ContentStream.Text), GetCurrentThreadID]);
+  frmHTMLPreview.DisplayPreview(FData.BufferID);
+end;
 
 end.

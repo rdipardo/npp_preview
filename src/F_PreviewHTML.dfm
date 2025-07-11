@@ -12,7 +12,7 @@ object frmHTMLPreview: TfrmHTMLPreview
   OnHide = FormHide
   OnKeyPress = FormKeyPress
   OnShow = FormShow
-  TextHeight = 25
+  TextHeight = 15
   object pnlButtons: TPanel
     Left = 0
     Top = 364
@@ -20,7 +20,9 @@ object frmHTMLPreview: TfrmHTMLPreview
     Height = 56
     Align = alBottom
     BevelOuter = bvNone
-    TabOrder = 0
+    TabOrder = 1
+    ExplicitTop = 347
+    ExplicitWidth = 498
     DesignSize = (
       504
       56)
@@ -34,7 +36,7 @@ object frmHTMLPreview: TfrmHTMLPreview
       OnClick = btnRefreshClick
     end
     object btnClose: TButton
-      Left = 410
+      Left = 404
       Top = 6
       Width = 75
       Height = 25
@@ -42,6 +44,7 @@ object frmHTMLPreview: TfrmHTMLPreview
       Caption = 'Close'
       TabOrder = 4
       OnClick = btnCloseClick
+      ExplicitLeft = 398
     end
     object sbrIE: TStatusBar
       AlignWithMargins = True
@@ -51,11 +54,10 @@ object frmHTMLPreview: TfrmHTMLPreview
       Height = 19
       Panels = <>
       SimplePanel = True
-      ExplicitTop = 42
-      ExplicitWidth = 484
+      ExplicitWidth = 492
     end
     object btnAbout: TButton
-      Left = 372
+      Left = 366
       Top = 6
       Width = 25
       Height = 25
@@ -64,6 +66,7 @@ object frmHTMLPreview: TfrmHTMLPreview
       Caption = '?'
       TabOrder = 2
       OnClick = btnAboutClick
+      ExplicitLeft = 360
     end
     object chkFreeze: TCheckBox
       Left = 89
@@ -75,52 +78,28 @@ object frmHTMLPreview: TfrmHTMLPreview
       OnClick = chkFreezeClick
     end
   end
-  object pnlPreview: TPanel
+  object wbHost: TWVWindowParent
     Left = 0
     Top = 0
     Width = 504
     Height = 364
     Align = alClient
-    BevelOuter = bvNone
-    Caption = '(no preview available)'
-    TabOrder = 1
-    ExplicitWidth = 490
-    ExplicitHeight = 327
-    object pnlHTML: TPanel
-      Left = 0
-      Top = 0
-      Width = 504
-      Height = 364
-      Align = alClient
-      BevelOuter = bvNone
-      Caption = 'pnlHTML'
-      TabOrder = 0
-      ExplicitWidth = 490
-      ExplicitHeight = 327
-      object wbIE: TWebBrowser
-        Left = 0
-        Top = 0
-        Width = 504
-        Height = 364
-        TabStop = False
-        Align = alClient
-        TabOrder = 0
-        OnStatusTextChange = wbIEStatusTextChange
-        OnTitleChange = wbIETitleChange
-        OnBeforeNavigate2 = wbIEBeforeNavigate2
-        OnDocumentComplete = wbIEDocumentComplete
-        OnStatusBar = wbIEStatusBar
-        OnNewWindow3 = wbIENewWindow3
-        ExplicitWidth = 490
-        ExplicitHeight = 327
-        ControlData = {
-          4C000000BA220000151900000000000000000000000000000000000000000000
-          000000004C000000000000000000000001000000E0D057007335CF11AE690800
-          2B2E12620B000000000000004C0000000114020000000000C000000000000046
-          8000000000000000000000000000000000000000000000000000000000000000
-          00000000000000000100000000000000000000000000000000000000}
-      end
-    end
+    TabOrder = 0
+    Browser = wbIE
+    ExplicitWidth = 498
+    ExplicitHeight = 347
+  end
+  object wbIE: TWVBrowser
+    DefaultURL = 'about:blank'
+    TargetCompatibleBrowserVersion = '95.0.1020.44'
+    AllowSingleSignOnUsingOSPrimaryAccount = False
+    OnInitializationError = wbIEInitializationError
+    OnAfterCreated = wbIEAfterCreated
+    OnDocumentTitleChanged = wbIETitleChange
+    OnStatusBarTextChanged = wbIEStatusBar
+    OnExecuteScriptWithResultCompleted = wbIEExecuteScriptWithResultCompleted
+    Left = 8
+    Top = 8
   end
   object tmrAutorefresh: TTimer
     Enabled = False

@@ -1,0 +1,77 @@
+version: 2.1
+#
+# SPDX-FileCopyrightText: Copyright (c) 2025 Robert Di Pardo
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+orbs:
+  lazarus: rdipardo/lazarus@4
+  win: circleci/windows@5
+
+references:
+  executor: &executor
+    executor:
+      name: win/default
+  development: &development
+    filters:
+      tags:
+        only: /v.*/
+  production: &production
+    context: gh-release-authoring
+    filters:
+      branches:
+        ignore: /.*/
+      tags:
+        only: /v.*/
+
+jobs:
+  push_release:
+    <<: *executor
+    parameters:
+      plugin_name:
+        type: string
+        default: PreviewHTML
+    steps:
+      - checkout
+      - run:
+          name: Clone submodules
+          command: |
+            git submodule sync --recursive
+            git submodule update --init --recursive
+      - attach_workspace:
+          at: .
+      - run:
+         name: Make Release Bundles
+         command: .\lazarus\make_release.cmd
+         shell: cmd.exe
+      - store_artifacts:
+          name: Upload << parameters.plugin_name >>_<< pipeline.git.tag >>_win32.zip
+          path: out/<< parameters.plugin_name >>_<< pipeline.git.tag >>_win32.zip
+          destination: << parameters.plugin_name >>_<< pipeline.git.tag >>_win32.zip
+      - store_artifacts:
+          name: Upload << parameters.plugin_name >>_<< pipeline.git.tag >>_x64.zip
+          path: out/<< parameters.plugin_name >>_<< pipeline.git.tag >>_x64.zip
+          destination: << parameters.plugin_name >>_<< pipeline.git.tag >>_x64.zip
+      - run:
+          name: Create GitHub Release
+          command: bash.exe .circleci/scripts/gh_release.sh
+          shell: bash.exe
+          environment:
+            SLUGX86: << parameters.plugin_name >>-<< pipeline.git.tag >>-win32.zip
+            SLUGX64: << parameters.plugin_name >>-<< pipeline.git.tag >>-x64.zip
+            BIN_DIR: out
+
+workflows:
+  lazarus_build:
+    jobs:
+      - lazarus/build_win:
+          project: PreviewHTML
+          project_dir: src/prj
+          bin_dir: out
+          build_type: Release
+          cross_build: true
+          <<: *development
+      - push_release:
+          <<: *production
+          requires:
+            - lazarus/build_win
+

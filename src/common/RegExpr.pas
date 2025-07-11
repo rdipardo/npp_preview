@@ -1,3 +1,9 @@
+{$IFDEF FPC}
+  {$codePage CP1252}{$H+}
+  {$warn 4104 off}
+  {$warn 5057 off}
+{$ENDIF}
+
 unit RegExpr;
 
 {
