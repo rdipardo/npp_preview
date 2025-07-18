@@ -53,7 +53,6 @@ object frmHTMLPreview: TfrmHTMLPreview
       Width = 498
       Height = 19
       Panels = <>
-      SimplePanel = True
       ExplicitWidth = 492
     end
     object btnAbout: TButton

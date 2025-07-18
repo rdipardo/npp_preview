@@ -96,8 +96,42 @@ end {TAboutForm.lblLinkClick};
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TAboutForm.ToggleDarkMode;
+{$ifndef FPC}
 begin
 end;
+{$else}
+const
+  clDarkModeLink = TColor($FFBF00);
+var
+  Palette : TDarkModeColors;
+  Lbl : TLabel;
+  I : Integer;
+  IsDark : Boolean;
+begin
+  inherited;
+  IsDark := False;
+  if Npp.IsDarkModeEnabled then begin
+    Npp.GetDarkModeColors(@Palette);
+    IsDark := True;
+  end;
+  for I := 0 to self.ComponentCount - 1 do begin
+    if (self.Components[i] is TLabel) then begin
+      Lbl := TLabel(self.Components[I]);
+      if Lbl.Hint <> '' then begin
+        if IsDark then
+          Lbl.Font.Color := clDarkModeLink
+        else
+          Lbl.Font.Color := clHotLight;
+      end else begin
+        if IsDark then
+          Lbl.Font.Color := TColor(Palette.Text)
+        else
+          Lbl.Font.Color := clWindowText;
+      end;
+    end;
+  end;
+end;
+{$endif}
 
 {$ifdef FPC}
 { ------------------------------------------------------------------------------------------------ }

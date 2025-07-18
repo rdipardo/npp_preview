@@ -36,6 +36,7 @@ type
     procedure CommandOpenFile(const Filename: nppString);
     procedure CommandShowAbout;
 
+    procedure BeNotified(sn: PSciNotification); override;
     procedure DoNppnToolbarModification; override;
     procedure DoNppnFileClosed(const BufferID: NativeUInt); override;
     procedure DoNppnBufferActivated(const BufferID: NativeUInt); override;
@@ -210,11 +211,14 @@ begin
   FrmParent := Nil;
   if Assigned(frmHTMLPreview) then
     FrmParent := TComponent(frmHTMLPreview);
-  with TAboutForm.Create(FrmParent) do begin
+  AboutForm := TAboutForm.Create(FrmParent);
+  with AboutForm do begin
     Npp := Self;
+    ToggleDarkMode;
     ShowModal;
     Free;
   end;
+  AboutForm := nil;
 end {TNppPluginPreviewHTML.CommandShowAbout};
 
 { ------------------------------------------------------------------------------------------------ }
@@ -247,6 +251,17 @@ begin
   Result := TUtf8IniFile.Create(ConfigDir + '\PreviewHTML\' + Name);
 end {TNppPluginPreviewHTML.GetSettings};
 
+{ ------------------------------------------------------------------------------------------------ }
+procedure TNppPluginPreviewHTML.BeNotified(sn: PSciNotification);
+begin
+  inherited;
+  if HWND(sn^.nmhdr.hwndFrom) = self.NppData.NppHandle then begin
+    if (sn^.nmhdr.code = NPPN_DARKMODECHANGED) then begin
+      if Assigned(FrmHTMLPreview) then FrmHTMLPreview.ToggleDarkMode;
+      if Assigned(AboutForm) then AboutForm.ToggleDarkMode;
+    end;
+  end;
+end {TNppPluginPreviewHTML.BeNotified};
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TNppPluginPreviewHTML.DoNppnToolbarModification;

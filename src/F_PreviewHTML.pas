@@ -56,6 +56,7 @@ type
     procedure FormDestroy(Sender: TObject);
     procedure tmrAutorefreshTimer(Sender: TObject);
     procedure chkFreezeClick(Sender: TObject);
+    procedure sbrIEDrawPanel(StatusBar: TStatusBar; Panel: TStatusPanel; const Rect: TRect);
     procedure wbIEInitializationError({%H-}ASender: TObject; ErrorCode: HRESULT; const ErrorMessage: wvstring);
   private
     { Private declarations }
@@ -84,6 +85,7 @@ type
     procedure WMMove({%H-}var AMessage : TWMMove); message WM_MOVE;
     procedure WMMoving({%H-}var AMessage : TMessage); message WM_MOVING;
 {$ifdef FPC}
+    procedure SubclassAndTheme(DmfMask: Cardinal); override;
     procedure HandleCloseQuery({%H-}Sender: TObject; {%H-}var CanClose: Boolean); override;
 {$endif}
   end;
@@ -132,15 +134,60 @@ constructor TfrmHTMLPreview.Create(AOwner: TComponent);
 begin
   inherited;
   self.Icon.Handle := LoadImage(Hinstance, 'TB_PREVIEW_HTML_ICO', IMAGE_ICON, 0, 0, (LR_DEFAULTSIZE or LR_LOADTRANSPARENT));
-  self.NppDefaultDockingMask := (DWS_DF_CONT_RIGHT or DWS_USEOWNDARKMODE);
+  self.NppDefaultDockingMask := (DWS_DF_CONT_RIGHT {$ifndef FPC} or DWS_USEOWNDARKMODE {$endif});
+  with sbrIE.Panels.Add do begin
+    Bevel := pbNone;
+    Width := sbrIE.Width;
+{$ifdef FPC}
+    Style := psOwnerDraw;
+{$endif}
+  end;
 end;
 
 { ------------------------------------------------------------------------------------------------ }
-// Standard components respond poorly to subclassing; see, e.g.,
+// VCL components respond poorly to subclassing; see, e.g.,
 // https://stackoverflow.com/a/15664777
 // https://forum.lazarus.freepascal.org/index.php?topic=22366.0
 procedure TfrmHTMLPreview.ToggleDarkMode;
+{$ifndef FPC}
 begin
+end;
+{$else}
+var
+  Palette: TDarkModeColors;
+begin
+  inherited; // implicit call to SubclassAndTheme()
+  if Npp.IsDarkModeEnabled then begin
+    Npp.GetDarkModeColors(@Palette);
+    sbrIE.Canvas.Brush.Color := TColor(Palette.Background);
+  end else
+    sbrIE.Canvas.Brush.Color := GetRGBColorResolvingParent;
+end;
+
+procedure TfrmHTMLPreview.SubclassAndTheme(DmfMask: Cardinal);
+begin
+  SendMessage(Npp.NppData.NppHandle, NPPM_DARKMODESUBCLASSANDTHEME, DmfMask, pnlButtons.Handle);
+  SendMessage(Npp.NppData.NppHandle, NPPM_DARKMODESUBCLASSANDTHEME, DmfMask, sbrIE.Handle);
+end;
+{$endif}
+
+procedure TfrmHTMLPreview.sbrIEDrawPanel(StatusBar: TStatusBar; Panel: TStatusPanel; const Rect: TRect);
+var
+  Palette: TDarkModeColors;
+  H, X, Y: Integer;
+begin
+  StatusBar.Canvas.FillRect(Rect);
+  StatusBar.Canvas.Font := StatusBar.Font;
+  if Npp.IsDarkModeEnabled then begin
+    Npp.GetDarkModeColors(@Palette);
+    StatusBar.Canvas.Font.Color := TColor(Palette.DarkerText);
+  end else
+    StatusBar.Canvas.Font.Color := clWindowText;
+  // https://forum.lazarus.freepascal.org/index.php/topic,60834.msg456446.html#msg456446
+  H := StatusBar.Canvas.TextHeight(Panel.Text);
+  Y := Rect.Top + (Rect.Height - H) div 2;
+  X := Rect.Left + 2;
+  StatusBar.Canvas.TextOut(X, Y, Panel.Text);
 end;
 
 { ------------------------------------------------------------------------------------------------ }
@@ -250,7 +297,7 @@ ODS('FreeAndNil(FFilterThread);');
   except
     on E: Exception do begin
 ODS('btnRefreshClick ### %s: %s', [E.ClassName, StringReplace(E.Message, sLineBreak, '', [rfReplaceAll])]);
-      sbrIE.SimpleText := E.Message;
+      sbrIE.Panels[0].Text := E.Message;
       sbrIE.Visible := True;
     end;
   end;
@@ -276,7 +323,7 @@ var
 begin
   try
     IsHTML := not WideSameText(ContentStream.Text, PLACEHOLDER_CONTENT);
-    sbrIE.Visible := IsHTML and (Length(sbrIE.SimpleText) > 0);
+    sbrIE.Visible := IsHTML and (Length(sbrIE.Panels[0].Text) > 0);
     if IsHTML then begin
       HTML := ContentStream.Text;
 ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy({$ifdef FPC}UTF8Encode{$endif}(HTML), 1, 10), #13#10, '', [rfReplaceAll]), Length(HTML), BufferID]);
@@ -314,7 +361,7 @@ ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy({$ifdef 
   except
     on E: Exception do begin
 ODS('DisplayPreview ### %s: %s', [E.ClassName, StringReplace(E.Message, sLineBreak, '', [rfReplaceAll])]);
-      sbrIE.SimpleText := E.Message;
+      sbrIE.Panels[0].Text := E.Message;
       sbrIE.Visible := True;
     end;
   end;
@@ -610,6 +657,7 @@ end;
 procedure TfrmHTMLPreview.FormShow(Sender: TObject);
 begin
   inherited;
+  ToggleDarkMode;
   with TNppPluginPreviewHTML(Npp).GetSettings() do begin
     tmrAutorefresh.Interval := ReadInteger('Autorefresh', 'Interval', tmrAutorefresh.Interval);
     Free;
@@ -731,7 +779,7 @@ end;
 { ------------------------------------------------------------------------------------------------ }
 procedure TfrmHTMLPreview.wbIEStatusTextChange(ASender: TObject; const Text: WideString);
 begin
-  sbrIE.SimpleText := {$ifdef FPC}UTf8Encode{$endif}(Text);
+  sbrIE.Panels[0].Text := {$ifdef FPC}UTf8Encode{$endif}(Text);
   sbrIE.Visible := Length(Text) > 0;
   if sbrIE.Visible then
   sbrIE.Invalidate;

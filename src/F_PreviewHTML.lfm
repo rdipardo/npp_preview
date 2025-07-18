@@ -43,7 +43,9 @@ inherited frmHTMLPreview: TfrmHTMLPreview
       Height = 36
       Top = 20
       Width = 320
+      OnDrawPanel = sbrIEDrawPanel
       Panels = <>
+      SimplePanel = False
     end
     object btnAbout: TButton
       Left = 188
