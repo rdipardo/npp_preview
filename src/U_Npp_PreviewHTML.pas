@@ -22,7 +22,6 @@ const
 type
   TNppPluginPreviewHTML = class(TNppPlugin)
   private
-    FSettings: TUtf8IniFile;
     function Caption: nppString;
     function UserAgentString: nppstring;
     function AddFuncItem(Name: nppString; Func: PFUNCPLUGINCMD; Checked: Boolean): Integer; overload;

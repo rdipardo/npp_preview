@@ -783,7 +783,8 @@ begin
     except
       on E: Exception do begin
         {--- MCO 30-05-2012: Ignore any errors; we weren't able to perform the transformation ---}
-        Result := '<html><title>Error transforming XML to HTML</title><body><pre style="color: red">' + StringReplace(E.Message, '<', '&lt;', [rfReplaceAll]) + '</pre></body></html>';
+        Result := WideFormat('<html><title>Error transforming XML to HTML</title><body><pre style="color: red">%s</pre></body></html>',
+          [StringReplace(E.Message, '<', '&lt;', [rfReplaceAll])]);
       end;
     end;
   finally
@@ -818,9 +819,13 @@ end;
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TfrmHTMLPreview.wbIETitleChange(ASender: TObject);
+var
+  DocTitle: wvString;
 begin
-  inherited;
-  self.UpdateDisplayInfo({$ifdef FPC}UTF8Encode{$endif}(wbIE.DocumentTitle));
+  DocTitle := wbIE.DefaultURL;
+  if not WideSameText('data:text/html', Copy(wbIE.DocumentTitle, 0, 14)) then
+     DocTitle := wbIE.DocumentTitle;
+  self.UpdateDisplayInfo({$ifdef FPC}UTF8Encode{$endif}(DocTitle));
 end;
 
 { ------------------------------------------------------------------------------------------------ }

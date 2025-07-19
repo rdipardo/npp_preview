@@ -3,7 +3,7 @@ unit F_About;
 interface
 
 uses
-  Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
+  Windows, SysUtils, Variants, Classes, Graphics, Controls, Forms,
   Dialogs, NppForms, StdCtrls, ExtCtrls;
 
 type
@@ -110,6 +110,7 @@ var
 begin
   inherited;
   IsDark := False;
+  Palette := Default(TDarkModeColors);
   if Npp.IsDarkModeEnabled then begin
     Npp.GetDarkModeColors(@Palette);
     IsDark := True;
