@@ -12,8 +12,9 @@ uses
   LCLType,
 {$endif}
   Windows, Messages, SysUtils, Classes, Variants, Graphics, Controls, Forms, Generics.Collections,
-  Dialogs, StdCtrls, ComCtrls, ExtCtrls, Utf8IniFiles,
+  Dialogs, StdCtrls, ComCtrls, ExtCtrls, Buttons, Utf8IniFiles,
   NppPlugin, NppDockingForms,
+  uWVWinControl,
   uWVBrowserBase,
   uWVBrowser,
   uWVWindowParent,
@@ -34,7 +35,7 @@ type
     btnRefresh: TButton;
     btnClose: TButton;
     sbrIE: TStatusBar;
-    btnAbout: TButton;
+    btnAbout, btnNavBack, btnNavForward: TBitBtn;
     tmrAutorefresh: TTimer;
     chkFreeze: TCheckBox;
     procedure btnRefreshClick(Sender: TObject);
@@ -47,6 +48,7 @@ type
     procedure FormShow(Sender: TObject);
     procedure wbIEAfterCreated({%H-}ASender: TObject);
     procedure wbIETitleChange({%H-}ASender: TObject);
+    procedure wbIENavigationHistoryChange({%H-}ASender: TObject);
     procedure wbIEStatusTextChange({%H-}ASender: TObject; const Text: WideString);
     procedure wbIEStatusBar({%H-}ASender: TObject; {%H-}const aWebView: ICoreWebView2);
     procedure wbIEExecuteScriptWithResultCompleted({%H-}Sender: TObject; {%H-}ErrorCode: HResult;
@@ -56,6 +58,8 @@ type
     procedure FormDestroy(Sender: TObject);
     procedure tmrAutorefreshTimer(Sender: TObject);
     procedure chkFreezeClick(Sender: TObject);
+    procedure btnNavBackClick({%H-}Sender: TObject);
+    procedure btnNavForwardClick({%H-}Sender: TObject);
     procedure sbrIEDrawPanel(StatusBar: TStatusBar; Panel: TStatusPanel; const Rect: TRect);
     procedure wbIEInitializationError({%H-}ASender: TObject; ErrorCode: HRESULT; const ErrorMessage: wvstring);
   private
@@ -67,6 +71,7 @@ type
 
     procedure SaveScrollPos;
     procedure RestoreScrollPos(const BufferID: TBufferID);
+    procedure UpdateNavButton(var ABtn: TBitBtn; NewState: Boolean);
 
     function  DetermineCustomFilter: string;
     function  ExecuteCustomFilter(const FilterName: string; const HTML: wvstring; const BufferID: TBufferID): Boolean;
@@ -251,6 +256,7 @@ ODS('FreeAndNil(FFilterThread);');
     FreeAndNil(FFilterThread);
     SaveScrollPos;
     ContentStream.Text := PLACEHOLDER_CONTENT;
+    wbIE.ClearBrowsingData(COREWEBVIEW2_BROWSING_DATA_KINDS_BROWSING_HISTORY);
 
     BufferID := SendMessage(Self.Npp.NppData.NppHandle, NPPM_GETCURRENTBUFFERID, 0, 0);
     hScintilla := Npp.CurrentScintilla;
@@ -306,10 +312,28 @@ end {TfrmHTMLPreview.btnRefreshClick};
 { ------------------------------------------------------------------------------------------------ }
 procedure TfrmHTMLPreview.chkFreezeClick(Sender: TObject);
 begin
-  btnRefresh.Enabled := not chkFreeze.Checked;
-  if btnRefresh.Enabled then
-    btnRefresh.Click;
+  with btnRefresh do begin
+    Enabled := not chkFreeze.Checked;
+    UpdateNavButton(BtnNavBack, Enabled);
+    UpdateNavButton(BtnNavForward, Enabled);
+    if Enabled then
+      Click;
+  end;
 end {TfrmHTMLPreview.chkFreezeClick};
+
+{ ------------------------------------------------------------------------------------------------ }
+procedure TfrmHTMLPreview.btnNavBackClick(Sender: TObject);
+begin
+  if wbIE <> nil then
+    wbIE.GoBack;
+end;
+
+{ ------------------------------------------------------------------------------------------------ }
+procedure TfrmHTMLPreview.btnNavForwardClick(Sender: TObject);
+begin
+  if wbIE <> nil then
+    wbIE.GoForward;
+end;
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TfrmHTMLPreview.DisplayPreview(const BufferID: TBufferID);
@@ -771,6 +795,13 @@ begin
 end {TfrmHTMLPreview.TransformXMLToHTML};
 
 { ------------------------------------------------------------------------------------------------ }
+procedure TfrmHTMLPreview.UpdateNavButton(var ABtn: TBitBtn; NewState: Boolean);
+begin
+  ABtn.Enabled := NewState;
+  ABtn.ShowHint := NewState;
+end;
+
+{ ------------------------------------------------------------------------------------------------ }
 procedure TfrmHTMLPreview.wbIEStatusBar(ASender: TObject; const aWebView: ICoreWebView2);
 begin
   wbIEStatusTextChange(ASender, TWVBrowser(ASender).StatusBarText);
@@ -790,6 +821,15 @@ procedure TfrmHTMLPreview.wbIETitleChange(ASender: TObject);
 begin
   inherited;
   self.UpdateDisplayInfo({$ifdef FPC}UTF8Encode{$endif}(wbIE.DocumentTitle));
+end;
+
+{ ------------------------------------------------------------------------------------------------ }
+procedure TfrmHTMLPreview.wbIENavigationHistoryChange(ASender: TObject);
+begin
+  if wbIE <> nil then begin
+    UpdateNavButton(BtnNavBack, wbIE.CanGoBack);
+    UpdateNavButton(BtnNavForward, wbIE.CanGoForward);
+  end;
 end;
 
 { ------------------------------------------------------------------------------------------------ }
