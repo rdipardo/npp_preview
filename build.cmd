@@ -37,13 +37,13 @@ if %errorlevel%==1 ( goto :USAGE ) else ( goto :TheEnd )
 
 :32
 :i386
-if "%FPC_BUILD_ALL%" NEQ "" ( rmdir /S /Q "out\i386-win32\%FPC_BUILD_TYPE%" 2>NUL: )
+if "%FPC_BUILD_ALL%" NEQ "" ( rmdir /S /Q "out\obj\i386-win32\%FPC_BUILD_TYPE%" 2>NUL: )
 lazbuild %FPC_BUILD_ALL% --bm=%FPC_BUILD_TYPE% --cpu=i386 src\prj\PreviewHTML.lpi -q
 goto :TheEnd
 
 :64
 :x86_64
-if "%FPC_BUILD_ALL%" NEQ "" ( rmdir /S /Q "out\x86_64-win64\%FPC_BUILD_TYPE%" 2>NUL: )
+if "%FPC_BUILD_ALL%" NEQ "" ( rmdir /S /Q "out\obj\x86_64-win64\%FPC_BUILD_TYPE%" 2>NUL: )
 lazbuild %FPC_BUILD_ALL% --bm=%FPC_BUILD_TYPE% --cpu=x86_64 src\prj\PreviewHTML.lpi -q
 goto :TheEnd
 

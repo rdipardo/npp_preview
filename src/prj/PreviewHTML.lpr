@@ -19,6 +19,11 @@
 {$mode Delphi}
 {$warn 2025 OFF}
 
+{$SetPEOSVersion 6.00}
+{$SetPESubsysVersion 6.00}
+{$ifdef CPUx86}
+  {$ImageBase $00400000}
+{$endif}
 {$if NOT DECLARED(useheaptrace)}
   {$SetPEOptFlags $0040}
 {$endif}
