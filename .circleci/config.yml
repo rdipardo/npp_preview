@@ -56,8 +56,8 @@ jobs:
           command: bash.exe .circleci/scripts/gh_release.sh
           shell: bash.exe
           environment:
-            SLUGX86: << parameters.plugin_name >>-<< pipeline.git.tag >>-win32.zip
-            SLUGX64: << parameters.plugin_name >>-<< pipeline.git.tag >>-x64.zip
+            SLUGX86: << parameters.plugin_name >>_<< pipeline.git.tag >>_win32.zip
+            SLUGX64: << parameters.plugin_name >>_<< pipeline.git.tag >>_x64.zip
             BIN_DIR: out
 
 workflows:
