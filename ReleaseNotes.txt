@@ -3,7 +3,7 @@ Preview HTML plugin for Notepad++
 
 v1.4.0.0, 2025-07-20
 --------------------
-- Changed: previews now dislay in a Microsoft Edge WebView2 embedded browser
+- Changed: previews now display in a Microsoft Edge WebView2 embedded browser
 - Changed: the preview panel will follow the active dark mode theme (requires Notepad++ version 8.5.4 or newer)
 - Added: two new buttons for navigating browser history
 
