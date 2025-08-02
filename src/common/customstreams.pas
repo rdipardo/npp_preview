@@ -172,15 +172,24 @@ begin
 end;
 
 procedure TUnicodeStream.SetSize(const ASize: TStreamSize);
+var
+  OldSize, I: TStreamSize;
 begin
   if (ASize < SIZE_MIN) or (FSize = ASize) then
     Exit;
 
+  OldSize := FSize;
   if ASize > SIZE_MAX then
     FSize := SIZE_MAX
   else
     FSize := ASize;
-  SetLength(FData, FSize);
+
+  if FSize < OldSize then begin
+    // Zero out leftover space
+    for I := (OldSize - 1) downto FSize do
+      FData[i] := 0;
+  end else
+    SetLength(FData, FSize);
 end;
 
 procedure TUnicodeStream.SetCodePage(const ACodePage: Cardinal);
