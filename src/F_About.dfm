@@ -33,10 +33,10 @@ object AboutForm: TAboutForm
     Top = 54
     Width = 212
     Height = 15
-    Caption = ''#169' 2024                            (current version)'
+    Caption = ''#169' 2025                            (current version)'
   end
   object lblAuthorContact: TLabel
-    Left = 60
+    Left = 61
     Top = 54
     Width = 83
     Height = 15
@@ -87,21 +87,21 @@ object AboutForm: TAboutForm
     Width = 256
     Height = 15
     Caption = 'Also using the Free Component Library (FCL)'
-  end  
+  end
   object lblFclAuthors: TLabel
     Left = 16
     Top = 138
     Width = 256
     Height = 15
     Caption = #169' 1999-2008 the Free Pascal development team'
-  end  
+  end
   object lblFclLicense: TLabel
     Left = 16
     Top = 156
     Width = 256
     Height = 15
     Caption = 'Licensed under the FPC modified LGPL Version 2'
-  end  
+  end
   object btnOK: TButton
     Left = 138
     Top = 224
