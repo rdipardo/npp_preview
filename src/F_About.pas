@@ -33,6 +33,8 @@ type
   end;
 {$endif}
 
+function IsAtLeastWindows11(var WinVerMajor, WinVerMinor, BuildNr: DWORD): Boolean;
+
 var
   AboutForm: TAboutForm;
 
@@ -49,12 +51,52 @@ uses
 
 {$R *.dfm}
 
+procedure RtlGetNtVersionNumbers(var Maj, Min, Build: DWORD); stdcall;
+  external 'ntdll.dll' Name 'RtlGetNtVersionNumbers';
+
+function IsAtLeastWindows11(var WinVerMajor, WinVerMinor, BuildNr: DWORD): Boolean;
+const
+  BuildNrMask: DWORD = $F0000000;
+begin
+  WinVerMajor := 0; WinVerMinor := 0; BuildNr := 0;
+  RtlGetNtVersionNumbers(WinVerMajor, WinVerMinor, BuildNr);
+  BuildNr := BuildNr and (not BuildNrMask);
+  Result := (WinVerMajor > 10) or ((WinVerMajor = 10) and (BuildNr >= 22000));
+end;
+
 { ------------------------------------------------------------------------------------------------ }
 procedure TAboutForm.FormCreate(Sender: TObject);
 var
   wvEnvironment: TCoreWebView2Environment;
+  WinVerMajor, WinVerMinor, BuildNr: DWORD;
 begin
   btnOK.Left := ((Self.Width div 2) - (btnOK.Width div 2) - 4);
+  IsAtLeastWindows11(WinVerMajor, WinVerMinor, BuildNr);
+  // Older than Win11 ?
+  if (WinVerMajor < 10) or (BuildNr < 22000) then
+  begin
+    with lblAuthorContact do
+    begin
+      Font.Height := -11;
+      // Newer than Win7 ?
+      if (BuildNr >= 9200) then
+      begin
+        Font.Name := 'Tahoma';
+        Left := Left - 3;
+      end;
+    end;
+    with lblTributeContact do
+    begin
+      Font.Height := -11;
+      if (BuildNr >= 9200) then
+      begin
+        Font.Name := 'Tahoma';
+        Left := Left - 2;
+      end else
+        Left := Left + 4;
+    end;
+  end;
+
   with TFileVersionInfo.Create(TModulePath.DLLFullName) do begin
     FVersionStr := Format('v%d.%d.%d.%d (%d-bit)', [MajorVersion, MinorVersion, Revision, Build, SizeOf(NativeInt)*8]);
     lblPlugin.Caption := Format(lblPlugin.Caption, [FVersionStr]);
