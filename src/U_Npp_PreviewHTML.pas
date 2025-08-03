@@ -284,8 +284,10 @@ var
   tb: TToolbarIcons;
   tbDM: TTbIconsDarkMode;
   bmpData: TPngImage;
+  bmpResName: String;
   hHDC: HDC;
   bmpX, bmpY, icoX, icoY: Integer;
+  WinVerMajor, WinVerMinor, BuildNr: DWORD;
 begin
   hHDC := hNil;
   bmpData := TPngImage.Create;
@@ -297,7 +299,10 @@ begin
     icoX := MulDiv(32, GetDeviceCaps(hHDC, LOGPIXELSX), 96);
     icoY := MulDiv(32, GetDeviceCaps(hHDC, LOGPIXELSY), 96);
     try
-      bmpData.LoadFromResourceName(HInstance, 'TB_BMP_DATA');
+      bmpResName := 'TB_BMP_DATA';
+      if not IsAtLeastWindows11(WinVerMajor, WinVerMinor, BuildNr) then
+        bmpResName := 'TB_BMP_16_DATA';
+      bmpData.LoadFromResourceName(HInstance, bmpResName);
       ToolbarBmp.Assign(bmpData);
       ToolbarBmp.PixelFormat := pf32bit;
       tb.ToolbarBmp := CopyImage(ToolbarBmp.Handle, IMAGE_BITMAP, bmpX, bmpY, LR_COPYRETURNORG);
