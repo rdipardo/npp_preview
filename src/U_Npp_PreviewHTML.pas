@@ -70,6 +70,9 @@ uses
   VersionInfo,
   Debug;
 
+const
+  ncDlgId = 0;
+
 {$ifdef FPC}
 type
   TPngImage = TPortableNetworkGraphic;
@@ -222,12 +225,8 @@ end {TNppPluginPreviewHTML.CommandShowAbout};
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TNppPluginPreviewHTML.CommandShowPreview;
-const
-  ncDlgId = 0;
 begin
   if GlobalWebView2Loader.InitializationError then begin
-    EnableMenuItem(GetMenu(NppData.nppHandle), CmdIdFromDlgId(ncDlgId),
-      MF_BYCOMMAND or MF_DISABLED or MF_GRAYED);
     Exit;
   end;
   if (not Assigned(frmHTMLPreview)) then begin
@@ -255,6 +254,10 @@ procedure TNppPluginPreviewHTML.BeNotified(sn: PSciNotification);
 begin
   inherited;
   if HWND(sn^.nmhdr.hwndFrom) = self.NppData.NppHandle then begin
+    if (sn^.nmhdr.code = NPPN_READY) and GlobalWebView2Loader.InitializationError then
+        EnableMenuItem(GetMenu(NppData.nppHandle), CmdIdFromDlgId(ncDlgId),
+          MF_BYCOMMAND or MF_DISABLED or MF_GRAYED)
+    else
     if (sn^.nmhdr.code = NPPN_DARKMODECHANGED) then begin
       if Assigned(FrmHTMLPreview) then FrmHTMLPreview.ToggleDarkMode;
       if Assigned(AboutForm) then AboutForm.ToggleDarkMode;
