@@ -1,6 +1,6 @@
 @echo off
 ::
-:: Copyright (C) 2024 Robert Di Pardo
+:: Copyright (C) 2024,2025 Robert Di Pardo
 ::
 :: Permission to use, copy, modify, and/or distribute this software for any purpose
 :: with or without fee is hereby granted.
@@ -15,7 +15,7 @@
 ::
 SETLOCAL
 
-set "VERSION=1.3.3.2"
+set "VERSION=1.3.3.3"
 set "PLUGIN=PreviewHTML"
 set "CONFIG_DIR=.\src\Config"
 set "FPC_DIR=.\out\3RD-PARTY"

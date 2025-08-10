@@ -1,6 +1,13 @@
 Preview HTML plugin for Notepad++
 =================================
 
+v1.3.3.3, 2025-08-10
+--------------------
+**Final release for Internet Explorer**
+
+- Fixed: dialog text will be dynamically resized on older Windows versions
+- Added: new icons for light and dark mode
+
 v1.3.3.2, 2024-11-16
 --------------------
 - Fixed: previewing an empty file in Notepad++ 8.4 or newer will no longer crash the application
