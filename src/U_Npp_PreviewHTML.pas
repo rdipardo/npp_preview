@@ -237,6 +237,11 @@ begin
 {$endif}
     frmHTMLPreview.Show(self, ncDlgId);
   end else begin
+      if frmHTMLPreview.Visible then begin
+        frmHTMLPreview.btnClose.Click;
+        frmHTMLPreview.Visible := False;
+        Exit;
+      end;
       frmHTMLPreview.Show
   end;
     frmHTMLPreview.btnRefresh.Click;
