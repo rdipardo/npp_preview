@@ -132,7 +132,7 @@ object AboutForm: TAboutForm
     Top = 182
     Width = 235
     Height = 30
-    Caption = 'Also using'#13#10#169' Microsoft Corporation. All rights reserved.'
+    Caption = 'Also using'#13#10#169' 2020 John Chadwick, ISC License'
   end
   object lblWebViewLicense: TLabel
     Left = 76
@@ -140,8 +140,8 @@ object AboutForm: TAboutForm
     Width = 136
     Height = 15
     Cursor = crHandPoint
-    Hint = 'https://www.nuget.org/packages/Microsoft.Web.WebView2'
-    Caption = 'Microsoft.Web.WebView2'
+    Hint = 'https://github.com/jchv/OpenWebView2Loader'
+    Caption = 'OpenWebView2Loader'
     Font.Charset = DEFAULT_CHARSET
     Font.Color = clHotLight
     Font.Height = -12

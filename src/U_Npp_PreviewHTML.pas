@@ -172,6 +172,7 @@ begin
   try
     GlobalWebView2Loader := TWVLoader.Create(nil);
     with GlobalWebView2Loader do begin
+      UseInternalLoader := True;
       UserDataFolder := UserDataDir;
       UserAgent := UserAgentString;
       EnableGPU := False;

@@ -60,10 +60,6 @@
               <Command Value="$(CompPath)\..\fpcres.exe -i $NameOnly($(ProjFile)).rc -o $NameOnly($(ProjFile)).res -of res -v"/>
               <CompileReasons Run="False"/>
             </ExecuteBefore>
-            <ExecuteAfter>
-              <Command Value="$Env(ComSpec) /c $(ProjPath)..\..\lazarus\post_build.cmd $(TargetOS) $Path($(OutputFile))"/>
-              <CompileReasons Run="False"/>
-            </ExecuteAfter>
           </Other>
         </CompilerOptions>
       </Item>
@@ -197,10 +193,6 @@
         <Command Value="$(CompPath)\..\fpcres.exe -i $NameOnly($(ProjFile)).rc -o $NameOnly($(ProjFile)).res -of res -v"/>
         <CompileReasons Run="False"/>
       </ExecuteBefore>
-      <ExecuteAfter>
-        <Command Value="$Env(ComSpec) /c $(ProjPath)..\..\lazarus\post_build.cmd $(TargetOS) $Path($(OutputFile))"/>
-        <CompileReasons Run="False"/>
-      </ExecuteAfter>
     </Other>
   </CompilerOptions>
   <Debugging>

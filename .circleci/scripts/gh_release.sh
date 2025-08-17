@@ -6,7 +6,7 @@
 test -z "$GH_API_TOKEN_2025" && exit 0
 
 # https://discuss.circleci.com/t/circle-branch-and-pipeline-git-branch-are-empty/44317/3
-COMMIT=$(git rev-parse "${CIRCLE_TAG:-'@'}") \
+COMMIT=$(git rev-parse "${CIRCLE_TAG:-@}") \
   && TMP=$(git branch -a --contains $COMMIT) \
   && BRANCH="${TMP##*[ /]}"
 

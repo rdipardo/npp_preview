@@ -29,10 +29,12 @@ set "SLUGX64=%SLUGX64_NAME%.zip"
 del /S /Q /F .\out\*.zip 2>NUL:
 call %~dp0build.cmd
 
+xcopy /DIY LICENSE.txt .\out
+xcopy /DIY ReleaseNotes.txt .\out
 xcopy /DIY src\common\COPYING* %FPC_DIR%
-echo D | xcopy /DIY src\Microsoft.Web.WebView2\ "%FPC_DIR%\Microsoft.Web.WebView2"
+@rem echo D | xcopy /DIY src\Microsoft.Web.WebView2\ "%FPC_DIR%\Microsoft.Web.WebView2"
 echo D | xcopy /DIY src\WebView4Delphi\LICENSE "%FPC_DIR%\WebView4Delphi"
-7z a -tzip "%SLUG%" "%PLUGIN_DLLS%" *.txt %CONFIG_DIR%\*.ini %FPC_DIR% -y
-7z a -tzip "%SLUGX64%" "%PLUGINX64_DLLS%" *.txt %CONFIG_DIR%\*.ini %FPC_DIR% -y
+7z a -tzip "%SLUG%" "%PLUGIN_DLLS%" .\out\*.txt %CONFIG_DIR%\*.ini %FPC_DIR% -y
+7z a -tzip "%SLUGX64%" "%PLUGINX64_DLLS%" .\out\*.txt %CONFIG_DIR%\*.ini %FPC_DIR% -y
 
 ENDLOCAL

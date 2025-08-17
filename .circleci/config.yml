@@ -23,13 +23,14 @@ references:
       tags:
         only: /v.*/
 
+parameters:
+  plugin_name:
+    type: string
+    default: PreviewHTML
+
 jobs:
-  push_release:
+  build:
     <<: *executor
-    parameters:
-      plugin_name:
-        type: string
-        default: PreviewHTML
     steps:
       - checkout
       - run:
@@ -37,41 +38,65 @@ jobs:
           command: |
             git submodule sync --recursive
             git submodule update --init --recursive
-      - attach_workspace:
-          at: .
+      - lazarus/install:
+          win32: true
       - run:
-         name: Make Release Bundles
+         name: Build and Pack
          command: .\lazarus\make_release.cmd
          shell: cmd.exe
+      - unless:
+          condition:
+            matches:
+              pattern: 'v.*'
+              value:   << pipeline.git.tag >>
+          steps:
+            - run:
+               name: Prepare Artifacts
+               command: |
+                 7z a -tzip << pipeline.parameters.plugin_name >>_x64.zip ./src/config/*.ini ./out/x86_64-win64/Release/*.dll
+                 7z a -tzip << pipeline.parameters.plugin_name >>_win32.zip ./src/config/*.ini ./out/i386-win32/Release/*.dll
+            - store_artifacts:
+                name: Upload << pipeline.parameters.plugin_name >>_win32.zip
+                path: << pipeline.parameters.plugin_name >>_win32.zip
+                destination: << pipeline.parameters.plugin_name >>_win32.zip
+            - store_artifacts:
+                name: Upload << pipeline.parameters.plugin_name >>_x64.zip
+                path: << pipeline.parameters.plugin_name >>_x64.zip
+                destination: << pipeline.parameters.plugin_name >>_x64.zip
+      - persist_to_workspace:
+          root: .
+          paths: out
+
+  push_release:
+    <<: *executor
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
       - store_artifacts:
-          name: Upload << parameters.plugin_name >>_<< pipeline.git.tag >>_win32.zip
-          path: out/<< parameters.plugin_name >>_<< pipeline.git.tag >>_win32.zip
-          destination: << parameters.plugin_name >>_<< pipeline.git.tag >>_win32.zip
+          name: Upload << pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_win32.zip
+          path: out/<< pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_win32.zip
+          destination: << pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_win32.zip
       - store_artifacts:
-          name: Upload << parameters.plugin_name >>_<< pipeline.git.tag >>_x64.zip
-          path: out/<< parameters.plugin_name >>_<< pipeline.git.tag >>_x64.zip
-          destination: << parameters.plugin_name >>_<< pipeline.git.tag >>_x64.zip
+          name: Upload << pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_x64.zip
+          path: out/<< pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_x64.zip
+          destination: << pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_x64.zip
       - run:
           name: Create GitHub Release
           command: bash.exe .circleci/scripts/gh_release.sh
           shell: bash.exe
           environment:
-            SLUGX86: << parameters.plugin_name >>_<< pipeline.git.tag >>_win32.zip
-            SLUGX64: << parameters.plugin_name >>_<< pipeline.git.tag >>_x64.zip
+            SLUGX86: << pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_win32.zip
+            SLUGX64: << pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_x64.zip
             BIN_DIR: out
 
 workflows:
   lazarus_build:
     jobs:
-      - lazarus/build_win:
-          project: PreviewHTML
-          project_dir: src/prj
-          bin_dir: out
-          build_type: Release
-          cross_build: true
+      - build:
           <<: *development
       - push_release:
           <<: *production
           requires:
-            - lazarus/build_win
+            - build
 

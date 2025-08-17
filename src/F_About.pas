@@ -68,6 +68,8 @@ end;
 procedure TAboutForm.FormCreate(Sender: TObject);
 var
   wvEnvironment: TCoreWebView2Environment;
+  wvLoaderPath: WideString;
+  wvLoaderAddr: NativeInt;
   WinVerMajor, WinVerMinor, BuildNr: DWORD;
 begin
   btnOK.Left := ((Self.Width div 2) - (btnOK.Width div 2) - 4);
@@ -112,9 +114,16 @@ begin
       FreeAndNil(wvEnvironment);
     end;
   end else begin
-    with TFileVersionInfo.Create(ChangeFilePath('WebView2Loader.dll', TModulePath.DLL)) do begin
-      lblIEVersion.Caption := Format('Using embedded WebView2 browser version %s', [ProductVersion]);
-      Free;
+    wvLoaderAddr := GetModuleHandleW(PWCHAR('WebView2Loader.dll'));
+    SetLastError(0);
+    if wvLoaderAddr <> 0 then begin
+        SetLength(wvLoaderPath, (MAX_PATH + 1) * SizeOf(WChar));
+        if GetModuleFileNameW(wvLoaderAddr, PWCHAR(wvLoaderPath), MAX_PATH * SizeOf(WChar)) > 0 then begin
+          with TFileVersionInfo.Create(wvLoaderPath) do begin
+            lblIEVersion.Caption := Format('Using embedded WebView2 browser version %s', [ProductVersion]);
+            Free;
+          end;
+        end;
     end;
   end;
 end {TAboutForm.FormCreate};
