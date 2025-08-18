@@ -662,7 +662,7 @@ procedure TfrmHTMLPreview.FormHide(Sender: TObject);
 begin
   SaveScrollPos;
   SendMessage(self.Npp.NppData.NppHandle, NPPM_SETMENUITEMCHECK, self.CmdID, 0);
-  // self.Visible := False;
+  self.Visible := False;
 end;
 
 { ------------------------------------------------------------------------------------------------ }

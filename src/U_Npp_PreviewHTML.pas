@@ -240,7 +240,6 @@ begin
   end else begin
       if frmHTMLPreview.Visible then begin
         frmHTMLPreview.btnClose.Click;
-        frmHTMLPreview.Visible := False;
         Exit;
       end;
       frmHTMLPreview.Show
