@@ -287,6 +287,7 @@ ODS('FreeAndNil(FFilterThread);');
 //MessageBox(Npp.NppData.NppHandle, PChar(Format('FilterName: %s', [FilterName])), 'PreviewHTML', MB_ICONINFORMATION);
         wbIEStatusTextChange(wbIE, WideFormat('Running filter %s...', [FilterName]));
         if ExecuteCustomFilter(FilterName, HTML, BufferID) then begin
+          PrevTimerID := SetTimer(Handle, 0, 800, @PreviewRefreshTimer);
           Exit;
         end else begin
           wbIEStatusTextChange(wbIE, WideFormat('Failed filter %s...', [FilterName]));
