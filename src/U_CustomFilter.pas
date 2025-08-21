@@ -229,6 +229,7 @@ ODS('About to synchronize HTML of length %d in thread ID [%x]', [Length(HTML), G
     end;
 
 ODS('Cleaning up...');
+    frmHTMLPreview.sbrIE.Panels[0].Text := 'Done';
     // Delete the temporary files
     if (InFile <> '') and not WideSameText(FData.DocFile, OutFile) then
       DeleteFile(OutFile);
