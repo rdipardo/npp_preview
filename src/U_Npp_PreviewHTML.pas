@@ -40,6 +40,7 @@ type
     procedure DoNppnFileClosed(const BufferID: NativeUInt); override;
     procedure DoNppnBufferActivated(const BufferID: NativeUInt); override;
     procedure DoModified(const hwnd: HWND; const modificationType: Integer); override;
+    procedure DoNppnShutdown; override;
 
     function  GetSettings(const Name: WideString = 'Settings.ini'): TUtf8IniFile;
 
@@ -346,6 +347,19 @@ begin
   end;
   inherited;
 end {TNppPluginPreviewHTML.DoNppnFileClosed};
+
+{ ------------------------------------------------------------------------------------------------ }
+procedure TNppPluginPreviewHTML.DoNppnShutdown;
+var
+  I: NativeUInt;
+begin
+  for I:=0 to SendNppMessage(NPPM_GETNBOPENFILES, 0, PRIMARY_VIEW) do
+    DoNppnFileClosed(SendNppMessage(NPPM_GETBUFFERIDFROMPOS, I, PRIMARY_VIEW));
+  for I:=0 to SendNppMessage(NPPM_GETNBOPENFILES, 0, SECOND_VIEW) do
+    DoNppnFileClosed(SendNppMessage(NPPM_GETBUFFERIDFROMPOS, I, SECOND_VIEW));
+  if Assigned(frmHTMLPreview) then
+    KillTimer(frmHTMLPreview.Handle, frmHTMLPreview.PrevTimerID);
+end {TNppPluginPreviewHTML.DoNppnShutdown};
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TNppPluginPreviewHTML.DoModified(const hwnd: HWND; const modificationType: Integer);
