@@ -600,7 +600,7 @@ begin
     5:    FilterData.Encoding := TEncoding.UTF7;
     else  FilterData.Encoding := TEncoding.ANSI;
   end;
-  FilterData.UseBOM := BufferEncoding in [1, 2, 3];
+  FilterData.UseBOM := False; // BufferEncoding in [1, 2, 3];
   FilterData.Modified := SendMessage(hScintilla, SCI_GETMODIFY, 0, 0) <> 0;
 
   Filters := TNppPluginPreviewHTML(Npp).GetSettings('Filters.ini');

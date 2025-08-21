@@ -36,6 +36,7 @@ type
     constructor Create(const Data: TFilterData); reintroduce;
     destructor  Destroy; override;
     procedure Execute; override;
+    function StripBom(const Text: string): string;
   end;
 
 
@@ -190,7 +191,7 @@ ODS('Command="%s"; WorkingDir="%s"; InFile="%s"; OutFile="%s"', [Command, Workin
       case OutputMethod of
         cotStandardOutput: begin
           // read the output from the process's standard output stream
-          HTML := TStringStream(Output).{$ifdef FPC}UnicodeDataString{$else}DataString{$endif};
+          HTML := StripBom(Output.{$ifdef FPC}UnicodeDataString{$else}DataString{$endif});
           if Length(HTML) = 0 then
             HTML := '<pre style="color: darkred">' +
                 {$ifdef FPC}UnicodeStringReplace{$else}StringReplace{$endif}(
@@ -208,7 +209,7 @@ ODS('Command="%s"; WorkingDir="%s"; InFile="%s"; OutFile="%s"', [Command, Workin
               FileClose(sOutFile.Handle);
               sOutFile.Free;
             end;
-            HTML := SS.{$ifdef FPC}UnicodeDataString{$else}DataString{$endif};
+            HTML := StripBom(SS.{$ifdef FPC}UnicodeDataString{$else}DataString{$endif});
           finally
             SS.Free;
           end;
@@ -334,6 +335,13 @@ begin
     EMS.Free;
   end;
 end {TCustomFilterThread.Run};
+
+function TCustomFilterThread.StripBom(const Text: string): string;
+const
+  BOM: TBytes = [ $EF, $BF, $BD ];
+begin
+  Result := {$ifdef FPC}UnicodeStringReplace{$else}StringReplace{$endif}(Text, FData.Encoding.GetString(BOM), '', [rfReplaceAll]);
+end;
 
 procedure TCustomFilterThread.DoSynchronize;
 begin
