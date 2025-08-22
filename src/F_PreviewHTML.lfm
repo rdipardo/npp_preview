@@ -50,7 +50,7 @@ inherited frmHTMLPreview: TfrmHTMLPreview
     object btnAbout: TBitBtn
       Left = 188
       Height = 25
-      Hint = 'About|About this plugin'
+      Hint = 'Help|Browse help topics'
       Top = 6
       Width = 25
       Anchors = [akTop, akRight]

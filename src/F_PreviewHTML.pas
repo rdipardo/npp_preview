@@ -105,6 +105,7 @@ uses
   ComObj, StrUtils, Masks,
   RegExpr,
   Registry,
+  ShellAPI,
   Debug,
   U_Npp_PreviewHTML;
 
@@ -635,8 +636,13 @@ end {TfrmHTMLPreview.FilterThreadTerminate};
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TfrmHTMLPreview.btnAboutClick(Sender: TObject);
+const
+  WikiPage = 'https://github.com/rdipardo/npp_preview/wiki';
 begin
-  (npp as TNppPluginPreviewHTML).CommandShowAbout;
+  if (not GlobalWebView2Loader.InitializationError) and (wbIE <> nil) then begin
+    wbIE.Navigate(WikiPage)
+  end else
+    ShellAPI.ShellExecute(Self.Handle, 'Open', @WikiPage[1], Nil, Nil, SW_SHOWNORMAL);
 end {TfrmHTMLPreview.btnAboutClick};
 
 { ------------------------------------------------------------------------------------------------ }

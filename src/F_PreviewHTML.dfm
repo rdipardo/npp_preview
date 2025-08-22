@@ -56,16 +56,17 @@ object frmHTMLPreview: TfrmHTMLPreview
       ExplicitWidth = 492
     end
     object btnAbout: TBitBtn
-      Left = 348
+      Left = 322
       Top = 6
-      Width = 25
+      Width = 58
       Height = 25
-      Hint = 'About|About this plugin'
+      Hint = 'Help|Browse help topics'
       Anchors = [akTop, akRight]
-      Caption = '?'
+      Kind = bkHelp
       ParentShowHint = False
       ShowHint = True
       Spacing = 0
+      Margin = 6
       TabOrder = 4
       OnClick = btnAboutClick
       ExplicitLeft = 342
@@ -80,7 +81,7 @@ object frmHTMLPreview: TfrmHTMLPreview
       OnClick = chkFreezeClick
     end
     object btnNavBack: TBitBtn
-      Left = 280
+      Left = 262
       Top = 6
       Width = 25
       Height = 25
@@ -174,7 +175,7 @@ object frmHTMLPreview: TfrmHTMLPreview
       ExplicitLeft = 274
     end
     object btnNavForward: TBitBtn
-      Left = 310
+      Left = 292
       Top = 6
       Width = 25
       Height = 25

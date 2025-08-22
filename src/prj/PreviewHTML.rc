@@ -1,7 +1,7 @@
 
 #define PLUGIN_NAME "PreviewHTML"
-#define PLUGIN_VERSION "1.4.0.2\0"
-#define PLUGIN_VERSION_WORDS 1,4,0,2
+#define PLUGIN_VERSION "1.4.0.3\0"
+#define PLUGIN_VERSION_WORDS 1,4,0,3
 
 #include "PreviewHTML_TB.rc"
 
