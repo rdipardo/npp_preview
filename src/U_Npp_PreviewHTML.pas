@@ -77,6 +77,8 @@ const
 {$ifdef FPC}
 type
   TPngImage = TPortableNetworkGraphic;
+var
+  FauxModalTimerID: UIntPtr;
 {$else}
 var
   ToolbarBmp: TBitMap;
@@ -209,20 +211,43 @@ begin
 end {TNppPluginPreviewHTML.CommandOpenFilters};
 { ------------------------------------------------------------------------------------------------ }
 procedure TNppPluginPreviewHTML.CommandShowAbout;
+{$ifdef FPC}
+  procedure FauxModalTimer(WndHandle: HWND; Msg: UINT; EventID: UINT; TimeMS: UINT); stdcall;
+  begin
+    KillTimer(0, EventID);
+    if Assigned(AboutForm) then
+      AboutForm.SetFocus;
+  end;
+{$endif}
 var
   FrmParent: TComponent;
+  CheckState: Boolean;
 begin
+{$ifdef FPC}
+  if Assigned(AboutForm) then
+    Exit;
+{$endif}
   FrmParent := Nil;
+  CheckState := False;
   if Assigned(frmHTMLPreview) then
+  begin
     FrmParent := TComponent(frmHTMLPreview);
+    CheckState := frmHTMLPreview.chkFreeze.Checked;
+    frmHTMLPreview.chkFreeze.Checked := True;
+  end;
   AboutForm := TAboutForm.Create(FrmParent);
   with AboutForm do begin
     Npp := Self;
     ToggleDarkMode;
+{$ifdef FPC}
+    FauxModalTimerID := SetTimer(0, 0, 100, @FauxModalTimer);
+{$endif}
     ShowModal;
     Free;
   end;
   AboutForm := nil;
+  if Assigned(frmHTMLPreview) then
+    frmHTMLPreview.chkFreeze.Checked := CheckState;
 end {TNppPluginPreviewHTML.CommandShowAbout};
 
 { ------------------------------------------------------------------------------------------------ }
@@ -391,5 +416,9 @@ finalization
 {$ifndef FPC}
   if Assigned(ToolbarBmp) then
     FreeAndNil(ToolbarBmp);
+{$else}
+  KillTimer(0, FauxModalTimerID);
+  if Assigned(AboutForm) then
+    FreeAndNil(AboutForm);
 {$endif}
 end.
