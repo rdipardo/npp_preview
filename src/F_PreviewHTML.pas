@@ -107,6 +107,9 @@ uses
   Registry,
   ShellAPI,
   Debug,
+{$ifndef FPC}
+  F_About,
+{$endif}
   U_Npp_PreviewHTML;
 
 const
@@ -137,8 +140,16 @@ end;
 { ================================================================================================ }
 
 constructor TfrmHTMLPreview.Create(AOwner: TComponent);
+{$ifndef FPC}
+var
+  WinVerMajor, WinVerMinor, BuildNr: DWORD;
+{$endif}
 begin
   inherited;
+{$ifndef FPC}
+  if not IsAtLeastWindows11(WinVerMajor, WinVerMinor, BuildNr) then
+    btnAbout.Margin := 4;
+{$endif}
   self.Icon.Handle := LoadImage(Hinstance, 'TB_PREVIEW_HTML_ICO', IMAGE_ICON, 0, 0, (LR_DEFAULTSIZE or LR_LOADTRANSPARENT));
   self.NppDefaultDockingMask := (DWS_DF_CONT_RIGHT {$ifndef FPC} or DWS_USEOWNDARKMODE {$endif});
   with sbrIE.Panels.Add do begin
