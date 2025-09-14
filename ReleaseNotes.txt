@@ -1,6 +1,20 @@
 Preview HTML plugin for Notepad++
 =================================
 
+v1.4.1.0, 2025-09-14
+--------------------
+- Fixed: filter-generated previews are eagerly loaded to prevent lagging ([#5])
+- Changed: Microsoft's `WebView2Loader.dll` is no longer required ([#4])
+- Changed: clicking the preview toolbar button hides the panel if it's already open ([#3])
+- Changed: the "Help" button opens the plugin's [wiki homepage] in the preview panel
+- Changed: preview scroll positions are "sticky" by default, i.e., preserved after a refresh
+- Added: new setting to enable/disable sticky scroll positions; to disable, add the following to
+         `%AppData%\Notepad++\plugins\Config\PreviewHTML\Settings.ini` (fully installed Notepad++ versions),
+         or `$(PORTABLE_NPP_DIR)\plugins\Config\PreviewHTML\Settings.ini` (portable versions):
+
+         [Scroll]
+         Sticky=0
+
 v1.4.0.0, 2025-07-20
 --------------------
 - Changed: previews now display in a Microsoft Edge WebView2 embedded browser
@@ -67,6 +81,10 @@ v1.1.0.0, 2013-01-20
   [1b34ee74aa].
 
 
+[#3]: https://github.com/rdipardo/npp_preview/issues/3
+[#4]: https://github.com/rdipardo/npp_preview/issues/4
+[#5]: https://github.com/rdipardo/npp_preview/issues/5
+[wiki homepage]: https://github.com/rdipardo/npp_preview/wiki
 [a017892ab7]: https://fossil.2of4.net/npp_preview/tktview/a017892ab7
 [cfc74baf4b]: https://fossil.2of4.net/npp_preview/tktview/cfc74baf4b
 [20d1203257]: https://fossil.2of4.net/npp_preview/tktview/20d1203257

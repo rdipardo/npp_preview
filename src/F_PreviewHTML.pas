@@ -502,7 +502,7 @@ end {TfrmHTMLPreview.ForgetBuffer};
 procedure TfrmHTMLPreview.ReloadSettings;
 begin
   with TNppPluginPreviewHTML(Npp).GetSettings() do begin
-    FPreserveScrollPosition := ReadBool('Scroll', 'Preserve', True);
+    FPreserveScrollPosition := ReadBool('Scroll', 'Sticky', True);
     tmrAutorefresh.Interval := ReadInteger('Autorefresh', 'Interval', tmrAutorefresh.Interval);
     Free;
   end;
