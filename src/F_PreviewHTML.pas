@@ -68,9 +68,10 @@ type
     FScrollPositions: TDictionary<TBufferID,TPoint>;
     FFilterThread: TCustomFilterThread;
     FEnsureRendered: Boolean;
+    FPreserveScrollPosition: Boolean;
 
     procedure SaveScrollPos;
-    procedure RestoreScrollPos(const BufferID: TBufferID);
+    procedure RestoreScrollPos;
     procedure UpdateNavButton(var ABtn: TBitBtn; NewState: Boolean);
 
     function  DetermineCustomFilter: string;
@@ -84,6 +85,7 @@ type
     constructor Create(AOwner: TComponent); override;
     procedure ToggleDarkMode; override;
     procedure ResetTimer;
+    procedure ReloadSettings;
     procedure ForgetBuffer(const BufferID: TBufferID);
     procedure DisplayPreview(const BufferID: TBufferID);
   protected
@@ -211,6 +213,7 @@ end;
 procedure TfrmHTMLPreview.FormCreate(Sender: TObject);
 begin
   FScrollPositions := TDictionary<TBufferID,TPoint>.Create;
+  FPreserveScrollPosition := True;
   //self.KeyPreview := true; // special hack for input forms
   self.OnFloat := self.FormFloat;
   self.OnDock := self.FormDock;
@@ -394,7 +397,7 @@ ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy({$ifdef 
     wbIE.NavigateToString(ContentStream.Text);
 
     if IsHTML then
-      RestoreScrollPos(BufferID);
+      FBufferID := BufferID;
   except
     on E: Exception do begin
 ODS('DisplayPreview ### %s: %s', [E.ClassName, StringReplace(E.Message, sLineBreak, '', [rfReplaceAll])]);
@@ -433,6 +436,7 @@ begin
             P.Y := JSIntValue shr 11;
             P.X := JSIntValue and $000007ff;
             FScrollPositions.AddOrSetValue(FBufferID, P);
+            RestoreScrollPos;
             ODS('SaveScrollPos[%x]: %dx%d', [FBufferID, P.X, P.Y]);
           end else
           begin
@@ -455,7 +459,7 @@ const
         'return (doc) ? `${(parseInt(doc.scrollTop) << 11) | parseInt(doc.scrollLeft)}` : `${-1}`;' +
     '})();';
 begin
-  if FBufferID = -1 then
+  if (not FPreserveScrollPosition) or (FBufferID = -1) then
     Exit;
 
   if (wbIE <> nil) then
@@ -463,12 +467,12 @@ begin
 end {TfrmHTMLPreview.SaveScrollPos};
 
 { ------------------------------------------------------------------------------------------------ }
-procedure TfrmHTMLPreview.RestoreScrollPos(const BufferID: TBufferID);
+procedure TfrmHTMLPreview.RestoreScrollPos;
 const
-  JS = '((left, top) => {' +
+  JS = 'window.setTimeout(() => {' +
       'let doc = Array.prototype.slice.call(document.getElementsByTagName("html"))[0];' +
-      'if (doc) { doc.scroll(left, top); }' +
-    '})(%d,%d);';
+      'if (doc) { doc.scroll(%d, %d); }' +
+    '}, 0);';
 var
   P: TPoint;
 begin
@@ -481,7 +485,6 @@ begin
   end else begin
     ODS('RestoreScrollPos[%x]: --', [FBufferID]);
   end;
-  FBufferID := BufferID;
 end {TfrmHTMLPreview.RestoreScrollPos};
 
 { ------------------------------------------------------------------------------------------------ }
@@ -494,6 +497,16 @@ begin
   end;
   ResetTimer;
 end {TfrmHTMLPreview.ForgetBuffer};
+
+{ ------------------------------------------------------------------------------------------------ }
+procedure TfrmHTMLPreview.ReloadSettings;
+begin
+  with TNppPluginPreviewHTML(Npp).GetSettings() do begin
+    FPreserveScrollPosition := ReadBool('Scroll', 'Preserve', True);
+    tmrAutorefresh.Interval := ReadInteger('Autorefresh', 'Interval', tmrAutorefresh.Interval);
+    Free;
+  end;
+end {TfrmHTMLPreview.ReloadSettings};
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TfrmHTMLPreview.ResetTimer;
@@ -700,10 +713,7 @@ procedure TfrmHTMLPreview.FormShow(Sender: TObject);
 begin
   inherited;
   ToggleDarkMode;
-  with TNppPluginPreviewHTML(Npp).GetSettings() do begin
-    tmrAutorefresh.Interval := ReadInteger('Autorefresh', 'Interval', tmrAutorefresh.Interval);
-    Free;
-  end;
+  ReloadSettings;
   SendMessage(self.Npp.NppData.NppHandle, NPPM_SETMENUITEMCHECK, self.CmdID, 1);
   if wbIE.IsSuspended then
     wbIE.Resume;

@@ -360,6 +360,7 @@ procedure TNppPluginPreviewHTML.DoNppnBufferActivated(const BufferID: NativeUInt
 begin
   inherited;
   if Assigned(frmHTMLPreview) and frmHTMLPreview.Visible then begin
+    frmHTMLPreview.ReloadSettings;
     frmHTMLPreview.btnRefresh.Click;
   end;
 end {TNppPluginPreviewHTML.DoNppnBufferActivated};
