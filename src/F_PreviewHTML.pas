@@ -53,6 +53,8 @@ type
     procedure wbIEStatusBar({%H-}ASender: TObject; {%H-}const aWebView: ICoreWebView2);
     procedure wbIEExecuteScriptWithResultCompleted({%H-}Sender: TObject; {%H-}ErrorCode: HResult;
       const AResult: ICoreWebView2ExecuteScriptResult; ExecutionID: integer);
+    procedure wbIEMoveFocusRequested({%H-}ASender: TObject; {%H-}const AController: ICoreWebView2Controller;
+      const Args: ICoreWebView2MoveFocusRequestedEventArgs);
     procedure btnCloseStatusbarClick(Sender: TObject);
     procedure btnAboutClick(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
@@ -449,6 +451,20 @@ begin
   finally
     JSResult.Free
   end;
+end;
+
+{ ------------------------------------------------------------------------------------------------ }
+procedure TfrmHTMLPreview.wbIEMoveFocusRequested(ASender: TObject; const AController: ICoreWebView2Controller;
+  const Args: ICoreWebView2MoveFocusRequestedEventArgs);
+var
+  Reason: COREWEBVIEW2_MOVE_FOCUS_REASON;
+begin
+  Args.Get_reason(Reason);
+  case Reason of
+    COREWEBVIEW2_MOVE_FOCUS_REASON_NEXT: btnRefresh.SetFocus;
+    COREWEBVIEW2_MOVE_FOCUS_REASON_PREVIOUS:  btnClose.SetFocus;
+  end;
+  Args.Set_Handled($00000001);
 end;
 
 { ------------------------------------------------------------------------------------------------ }
