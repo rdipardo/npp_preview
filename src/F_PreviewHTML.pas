@@ -90,6 +90,7 @@ type
     procedure ReloadSettings;
     procedure ForgetBuffer(const BufferID: TBufferID);
     procedure DisplayPreview(const BufferID: TBufferID);
+    function  UpdatePreview(const BufferID: TBufferID): Boolean;
   protected
     procedure WMMove({%H-}var AMessage : TWMMove); message WM_MOVE;
     procedure WMMoving({%H-}var AMessage : TMessage); message WM_MOVING;
@@ -112,7 +113,10 @@ uses
   ShellAPI,
   Debug,
 {$ifndef FPC}
+  REST.Json,
   F_About,
+{$else}
+  fpjson,
 {$endif}
   U_Npp_PreviewHTML;
 
@@ -125,6 +129,16 @@ const
     '   <p align="center" style="margin:14em 0">(no preview available)</p>' +
     ' </body>' +
     '</html>';
+
+function JsonEncode(const AString: wvstring): wvstring;
+begin
+  Result :=
+{$ifdef FPC}
+    UTF8ToString(StringToJSONString(UTF8Encode(AString)))
+{$else}
+    TJson.JsonEncode(AString)
+{$endif};
+end;
 
 procedure PreviewRefreshTimer(WndHandle: HWND; Msg: UINT; EventID: UINT; TimeMS: UINT); stdcall;
 begin
@@ -304,6 +318,8 @@ ODS('FreeAndNil(FFilterThread);');
 //MessageBox(Npp.NppData.NppHandle, PChar(Format('FilterName: %s', [FilterName])), 'PreviewHTML', MB_ICONINFORMATION);
         wbIEStatusTextChange(wbIE, WideFormat('Running filter %s...', [FilterName]));
         if ExecuteCustomFilter(FilterName, HTML, BufferID) then begin
+          if Assigned(FScrollPositions) then
+            FScrollPositions.Remove(BufferID);
           PrevTimerID := SetTimer(Handle, 0, 800, @PreviewRefreshTimer);
           Exit;
         end else begin
@@ -408,6 +424,15 @@ ODS('DisplayPreview ### %s: %s', [E.ClassName, StringReplace(E.Message, sLineBre
     end;
   end;
 end {TfrmHTMLPreview.DisplayPreview};
+
+{ ------------------------------------------------------------------------------------------------ }
+function TfrmHTMLPreview.UpdatePreview(const BufferID: TBufferID): Boolean;
+begin
+  Result := FScrollPositions.ContainsKey(BufferID);
+  if Result and (wbIE <> nil) then
+    wbIE.ExecuteScript(WideFormat('document.body.innerHTML = "%s";', [JsonEncode(ContentStream.Text)]));
+  SaveScrollPos;
+end {TfrmHTMLPreview.UpdatePreview};
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TfrmHTMLPreview.wbIEExecuteScriptWithResultCompleted(Sender: TObject; ErrorCode: HResult;

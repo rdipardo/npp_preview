@@ -346,7 +346,8 @@ end;
 procedure TCustomFilterThread.DoSynchronize;
 begin
 ODS('Synchronizing HTML of length %d in thread ID [%x]', [Length(ContentStream.Text), GetCurrentThreadID]);
-  frmHTMLPreview.DisplayPreview(FData.BufferID);
+  if not frmHTMLPreview.UpdatePreview(FData.BufferID) then
+    frmHTMLPreview.DisplayPreview(FData.BufferID);
 end;
 
 end.
