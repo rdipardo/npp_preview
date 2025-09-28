@@ -293,6 +293,9 @@ begin
       if Assigned(FrmHTMLPreview) then FrmHTMLPreview.ToggleDarkMode;
       if Assigned(AboutForm) then AboutForm.ToggleDarkMode;
     end;
+  end else if (sn^.nmhdr.code = SCN_AUTOCCOMPLETED) then begin
+    if Assigned(frmHTMLPreview) and frmHTMLPreview.Visible then
+      frmHTMLPreview.btnRefresh.Click;
   end;
 end {TNppPluginPreviewHTML.BeNotified};
 
