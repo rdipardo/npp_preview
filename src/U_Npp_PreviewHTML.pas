@@ -192,19 +192,30 @@ end {TNppPluginPreviewHTML.SetInfo};
 { ------------------------------------------------------------------------------------------------ }
 procedure TNppPluginPreviewHTML.CommandOpenFile(const Filename: nppString);
 var
+  HIniFile: THandle;
   FullPath: nppString;
   ConfigSample, DllSample: nppString;
 begin
   try
+    HIniFile := THandle(-1);
     FullPath := Npp.ConfigDir + '\PreviewHTML\' + Filename;
     if not FileExists(FullPath) then begin
+      CreateDir(Npp.ConfigDir + '\PreviewHTML');
       ConfigSample := ChangeFileExt(Filename, '.sample' + ExtractFileExt(FullPath));
       DllSample := ExtractFilePath(TModulePath.DLLFullName) + ConfigSample;
       if FileExists(DllSample) then
-        Win32Check(CopyFile(PChar(string(DllSample)), PChar(string(FullPath)), True));
+        Win32Check(CopyFileW(PWChar(DllSample), PWChar(FullPath), True))
+      else begin
+        try
+          HIniFile := FileCreate(FullPath, fmShareDenyWrite);
+        finally
+          if HIniFile <> THandle(-1) then
+            FileClose(HIniFile);
+        end;
+      end;
     end;
     if DoOpen(FullPath) then
-      MessageBox(Npp.NppData.NppHandle, PChar(Format('Unable to open "%s".', [FullPath])), PChar(Caption), MB_ICONWARNING);
+      MessageBoxW(Npp.NppData.NppHandle, PWChar(WideFormat('Unable to open "%s".', [FullPath])), PWChar(Caption), MB_ICONWARNING);
   except
     ShowException(ExceptObject, ExceptAddr);
   end;
