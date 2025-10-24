@@ -149,6 +149,34 @@ begin
   end;
 end;
 
+// A message deadlock will occur if:
+// 1) the preview form is undocked, i.e., not anchored to the Notepad++ application window
+// 2) the WebView component gains focus, e.g., by clicking in the browser content area (WM_PARENTNOTIFY)
+// 3) the WebView then loses focus, e.g., by clicking outside the parent form's border
+function SafeWindowProc(Hndl: HWND; Msg: Cardinal; _WParam: WPARAM; _LParam: LPARAM): LRESULT; stdcall;
+begin
+  case Msg of
+    WM_PARENTNOTIFY:
+    begin
+      if (frmHTMLPreview <> nil) then
+      begin
+        with frmHTMLPreview do
+        begin
+          Enabled := (GetAncestor(Handle, GA_ROOT) = Npp.NppData.NppHandle);
+          if (not Enabled) then
+            MessageBoxW(GetForegroundWindow(),
+              PWChar('Preview controls are now locked! Move the panel to a docked position to unlock them.'),
+              @WideString(Npp.GetName)[2],
+              MB_ICONWARNING or MB_OK);
+          pnlButtons.Enabled := Enabled;
+        end;
+      end;
+      Result := 0;
+    end else
+      Result := DefWindowProcW(Hndl, Msg, _WParam, _lParam);
+  end;
+end;
+
 {$ifdef FPC}
 {$R *.lfm}
 {$else}
@@ -242,6 +270,8 @@ begin
     if GlobalWebView2Loader.Initialized then
       wbIE.CreateBrowser(wbHost.Handle);
   end;
+  if (wbHost <> nil) then
+    SetWindowLongPtr(wbHost.ChildWindowHandle, GWLP_WNDPROC, NativeInt(@SafeWindowProc));
 end {TfrmHTMLPreview.FormCreate};
 { ------------------------------------------------------------------------------------------------ }
 procedure TfrmHTMLPreview.FormDestroy(Sender: TObject);
@@ -740,6 +770,8 @@ end;
 { ------------------------------------------------------------------------------------------------ }
 procedure TfrmHTMLPreview.FormDock(Sender: TObject);
 begin
+  Enabled := True;
+  pnlButtons.Enabled := True;
   ResetTimer;
 end;
 
