@@ -70,7 +70,8 @@ jobs:
   push_release:
     <<: *executor
     steps:
-      - checkout
+      - checkout:
+          method: full
       - attach_workspace:
           at: .
       - store_artifacts:

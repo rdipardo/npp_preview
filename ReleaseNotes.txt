@@ -1,6 +1,13 @@
 Preview HTML plugin for Notepad++
 =================================
 
+v1.4.2.0, 2025-10-26
+--------------------
+- Fixed: the application will not hang if (SHIFT+)TAB is pressed in the browser window after navigating to the first/last hyperlink in the document
+- Fixed: the application will not hang when removing focus from a floating browser window after clicking on it
+- Fixed: a blank `Settings.ini` file will be saved in the configuration directory if it does not exist
+- Changed: scroll position is always preserved when refreshing a generated preview
+
 v1.4.1.0, 2025-09-14
 --------------------
 - Fixed: filter-generated previews are eagerly loaded to prevent lagging ([#5])
