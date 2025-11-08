@@ -129,6 +129,14 @@ const
     '   <p align="center" style="margin:14em 0">(no preview available)</p>' +
     ' </body>' +
     '</html>';
+  SET_DEFAULT_BACKGROUND_JS = 'window.setTimeout(() => {' +
+    ' const bgc = getComputedStyle(document.body).getPropertyValue("background-color") || "";' +
+    ' const clr = getComputedStyle(document.body).getPropertyValue("color") || "";' +
+    ' /* black text on a black background? */' +
+    ' if (!([bgc, clr].every(s => /rgba?\((0(, )?){3,}/.test(s))))' +
+    '   return;' +
+    ' document.body.style.setProperty("background-color", "#fff");' +
+    '}, 120);';
 
 function JsonEncode(const AString: wvstring): wvstring;
 begin
@@ -389,14 +397,20 @@ end {TfrmHTMLPreview.chkFreezeClick};
 procedure TfrmHTMLPreview.btnNavBackClick(Sender: TObject);
 begin
   if wbIE <> nil then
+  begin
     wbIE.GoBack;
+    wbIE.ExecuteScript(SET_DEFAULT_BACKGROUND_JS);
+  end;
 end;
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TfrmHTMLPreview.btnNavForwardClick(Sender: TObject);
 begin
   if wbIE <> nil then
+  begin
     wbIE.GoForward;
+    wbIE.ExecuteScript(SET_DEFAULT_BACKGROUND_JS);
+  end;
 end;
 
 { ------------------------------------------------------------------------------------------------ }
@@ -445,7 +459,10 @@ ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy({$ifdef 
     wbIE.NavigateToString(ContentStream.Text);
 
     if IsHTML then
+    begin
+      wbIE.ExecuteScript(SET_DEFAULT_BACKGROUND_JS);
       FBufferID := BufferID;
+    end;
   except
     on E: Exception do begin
 ODS('DisplayPreview ### %s: %s', [E.ClassName, StringReplace(E.Message, sLineBreak, '', [rfReplaceAll])]);
