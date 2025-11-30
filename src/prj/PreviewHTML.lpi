@@ -32,6 +32,7 @@
             <SyntaxOptions>
               <SyntaxMode Value="Delphi"/>
               <UseAnsiStrings Value="False"/>
+              <CStyleMacros Value="True"/>
             </SyntaxOptions>
           </Parsing>
           <CodeGeneration>

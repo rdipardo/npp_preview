@@ -1,6 +1,11 @@
 ﻿unit U_CustomFilter;
 
-{$ifdef FPC}{$mode delphiunicode}{$endif}
+{$ifdef FPC}
+  {$mode delphiunicode}
+  {$ifndef DEBUG}
+    {$define ODS:=//}
+  {$endif}
+{$endif}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 interface

@@ -1,6 +1,11 @@
 ﻿unit F_PreviewHTML;
 
-{$ifdef FPC}{$unitpath common}{$endif}
+{$ifdef FPC}
+  {$unitpath common}
+  {$ifndef DEBUG}
+    {$define ODS:=//}
+  {$endif}
+{$endif}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 interface
