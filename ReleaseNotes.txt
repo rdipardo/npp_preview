@@ -1,6 +1,10 @@
 Preview HTML plugin for Notepad++
 =================================
 
+v1.4.2.1, 2025-12-05
+--------------------
+- Fixed: previews render with a white default background even when dark app mode is enabled ([MicrosoftEdge/WebView2Feedback#5454])
+
 v1.4.2.0, 2025-10-26
 --------------------
 - Fixed: the application will not hang if (SHIFT+)TAB is pressed in the browser window after navigating to the first/last hyperlink in the document
@@ -96,6 +100,7 @@ v1.1.0.0, 2013-01-20
 [cfc74baf4b]: https://fossil.2of4.net/npp_preview/tktview/cfc74baf4b
 [20d1203257]: https://fossil.2of4.net/npp_preview/tktview/20d1203257
 [1b34ee74aa]: https://fossil.2of4.net/npp_preview/tktview/1b34ee74aa
+[MicrosoftEdge/WebView2Feedback#5392]: https://github.com/MicrosoftEdge/WebView2Feedback/issues/5454
 
 <!--
      vim: ft=markdown
