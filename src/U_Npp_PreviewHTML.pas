@@ -181,6 +181,7 @@ begin
       EnableGPU := False;
       AllowInsecureLocalhost := True;
       AllowFileAccessFromFiles := True;
+      AllowOldRuntime := True;
       ScrollBarStyle := COREWEBVIEW2_SCROLLBAR_STYLE_FLUENT_OVERLAY;
       StartWebView2;
     end;
