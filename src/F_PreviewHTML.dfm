@@ -290,6 +290,7 @@ object frmHTMLPreview: TfrmHTMLPreview
     OnDocumentTitleChanged = wbIETitleChange
     OnStatusBarTextChanged = wbIEStatusBar
     OnMoveFocusRequested = wbIEMoveFocusRequested
+    OnNavigationStarting = wbIENavigationStarting
     OnExecuteScriptWithResultCompleted = wbIEExecuteScriptWithResultCompleted
     Left = 8
     Top = 8

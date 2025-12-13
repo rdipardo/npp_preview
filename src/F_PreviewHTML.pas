@@ -26,6 +26,7 @@ uses
   uWVLoader,
   uWVTypes,
   uWVTypeLibrary,
+  uWVCoreWebView2Args,
   uWVCoreWebView2ExecuteScriptResult,
   customstreams,
   U_CustomFilter;
@@ -60,6 +61,8 @@ type
       const AResult: ICoreWebView2ExecuteScriptResult; ExecutionID: integer);
     procedure wbIEMoveFocusRequested({%H-}ASender: TObject; {%H-}const AController: ICoreWebView2Controller;
       const Args: ICoreWebView2MoveFocusRequestedEventArgs);
+    procedure wbIENavigationStarting({%H-}ASender: TObject; {%H-}const AWebView: ICoreWebView2;
+      const Args: ICoreWebView2NavigationStartingEventArgs);
     procedure btnCloseStatusbarClick(Sender: TObject);
     procedure btnAboutClick(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
@@ -542,6 +545,25 @@ begin
     COREWEBVIEW2_MOVE_FOCUS_REASON_PREVIOUS:  btnClose.SetFocus;
   end;
   Args.Set_Handled($00000001);
+end;
+
+{ ------------------------------------------------------------------------------------------------ }
+procedure TfrmHTMLPreview.wbIENavigationStarting(ASender: TObject; const AWebView: ICoreWebView2;
+  const Args: ICoreWebView2NavigationStartingEventArgs);
+var
+  EventArgs : TCoreWebView2NavigationStartingEventArgs;
+begin
+  try
+    EventArgs := TCoreWebView2NavigationStartingEventArgs.Create(Args);
+    if (EventArgs.NavigationKind = COREWEBVIEW2_NAVIGATION_KIND_BACK_OR_FORWARD) and
+      WideSameText('data:text/html', Copy(EventArgs.Uri, 0, 14)) then
+    begin
+      FScrollPositions.Remove(FBufferID);
+      PrevTimerID := SetTimer(Handle, 0, 100, @PreviewRefreshTimer);
+    end;
+  finally
+    FreeAndNil(EventArgs);
+  end;
 end;
 
 { ------------------------------------------------------------------------------------------------ }
