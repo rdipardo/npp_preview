@@ -24,7 +24,6 @@ type
   private
     function Caption: nppString;
     function UserAgentString: nppstring;
-    function AddFuncItem(Name: nppString; Func: PFUNCPLUGINCMD; Checked: Boolean): Integer; overload;
     procedure AddFuncSeparator;
   public
     constructor Create;
@@ -135,13 +134,6 @@ begin
       {$ifdef CPUx64}'x64'{$else}'x86'{$endif}]);
     Free;
   end;
-end;
-
-{ ------------------------------------------------------------------------------------------------ }
-function TNppPluginPreviewHTML.AddFuncItem(Name: nppString; Func: PFUNCPLUGINCMD; Checked: Boolean): Integer;
-begin
-  Result := AddFuncItem(Name, Func);
-  self.FuncArray[Result].Checked := Checked;
 end;
 
 { ------------------------------------------------------------------------------------------------ }
