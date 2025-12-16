@@ -18,13 +18,22 @@ uses
 const
   SCLEX_HTML  = 4;
   SCLEX_XML   = 5;
+  SECTION_CSS = 'Style';
+  SECTION_JS  = 'JavaScript';
+  VAL_FNAME   = 'Filename';
+  VAL_EXT     = 'Extension';
+  VAL_EXT_ANY = '*';
+  DEFAULT_STYLE_SHEET      = 'style.css';
+  DEFAULT_DARK_STYLE_SHEET = 'style-dark.css';
 
 type
   TNppPluginPreviewHTML = class(TNppPlugin)
   private
+    FSettingsDir, FStaticAssetsDir: nppString;
     function Caption: nppString;
     function UserAgentString: nppstring;
     procedure AddFuncSeparator;
+    procedure SetMenuItemState(const Id: Integer; Disable: Boolean);
   public
     constructor Create;
 
@@ -41,14 +50,18 @@ type
     procedure DoModified(const hwnd: HWND; const modificationType: Integer); override;
     procedure DoNppnShutdown; override;
 
+    function  GetAssetPath(const Name: string; const Mime: string = '.css'): WideString;
     function  GetSettings(const Name: WideString = 'Settings.ini'): TUtf8IniFile;
 
-    property ConfigDir: nppString read GetPluginsConfigDir;
+    property ConfigDir: nppString read FSettingsDir;
+    property AssetDir: nppString read FStaticAssetsDir;
   end {TNppPluginPreviewHTML};
 
 procedure _FuncShowPreview; cdecl;
 procedure _FuncOpenSettings; cdecl;
 procedure _FuncOpenFilters; cdecl;
+procedure _FuncOpenDefaultStyleSheet; cdecl;
+procedure _FuncOpenUserScript; cdecl;
 procedure _FuncShowAbout; cdecl;
 
 
@@ -73,6 +86,9 @@ uses
 const
   ncDlgId = 0;
 
+var
+  StyleDlgId, ScriptDlgId: Integer;
+
 {$ifdef FPC}
 type
   TPngImage = TPortableNetworkGraphic;
@@ -92,6 +108,36 @@ end;
 procedure _FuncOpenFilters; cdecl;
 begin
   Npp.CommandOpenFile('Filters.ini');
+end;
+{ ------------------------------------------------------------------------------------------------ }
+procedure _FuncOpenDefaultStyleSheet; cdecl;
+var
+  Fname: string;
+begin
+  with Npp.GetSettings() do begin
+    Fname := Trim(ReadString(SECTION_CSS, VAL_FNAME, String.Empty));
+    Free;
+  end;
+  if (Fname <> String.Empty) then
+    Npp.DoOpen(Npp.GetAssetPath(Fname))
+  else begin
+    if Npp.IsDarkModeEnabled then
+      Npp.DoOpen(Npp.GetAssetPath(DEFAULT_DARK_STYLE_SHEET))
+    else
+      Npp.DoOpen(Npp.GetAssetPath(DEFAULT_STYLE_SHEET));
+  end
+end;
+{ ------------------------------------------------------------------------------------------------ }
+procedure _FuncOpenUserScript; cdecl;
+var
+  Fname: string;
+begin
+  with Npp.GetSettings() do begin
+    Fname := Trim(ReadString(SECTION_JS, VAL_FNAME, String.Empty));
+    Free;
+  end;
+  if (Fname <> String.Empty) then
+    Npp.DoOpen(Npp.GetAssetPath(Fname, '.js'));
 end;
 { ------------------------------------------------------------------------------------------------ }
 procedure _FuncShowAbout; cdecl;
@@ -143,9 +189,21 @@ begin
 end;
 
 { ------------------------------------------------------------------------------------------------ }
+procedure TNppPluginPreviewHTML.SetMenuItemState(const Id: Integer; Disable: Boolean);
+var
+  Flags: Cardinal;
+begin
+  Flags := MF_BYCOMMAND or MF_ENABLED;
+  if Disable then
+    Flags := MF_BYCOMMAND or MF_DISABLED or MF_GRAYED;
+  EnableMenuItem(GetMenu(NppData.nppHandle), CmdIdFromDlgId(Id), Flags);
+end;
+
+{ ------------------------------------------------------------------------------------------------ }
 procedure TNppPluginPreviewHTML.SetInfo(NppData: TNppData);
 var
   UserDataDir: WideString;
+  DefaultStyleSheet, DefaultDarkStyleSheet: WideString;
   Psk: PShortcutKey;
 begin
   inherited;
@@ -154,15 +212,36 @@ begin
   self.AddFuncItem('&Preview HTML', _FuncShowPreview, Psk);
   self.AddFuncItem('Edit &settings', _FuncOpenSettings);
   self.AddFuncItem('Edit &filter definitions', _FuncOpenFilters);
+  StyleDlgId := self.AddFuncItem('Edit default &CSS', _FuncOpenDefaultStyleSheet);
+  ScriptDlgId := self.AddFuncItem('Edit default &JavaScript', _FuncOpenUserScript);
 
   self.AddFuncSeparator;
 
   self.AddFuncItem('&About', _FuncShowAbout);
 
-  UserDataDir := Npp.ConfigDir + '\PreviewHTML\WebView2Cache';
+  FSettingsDir := GetPluginsConfigDir() + '\PreviewHTML\';
+  FStaticAssetsDir := FSettingsDir + 'Static';
+  UserDataDir := FSettingsDir + 'WebView2Cache';
+
+  if not DirectoryExists(FSettingsDir) then
+    CreateDir(FSettingsDir);
+
+  if not DirectoryExists(FStaticAssetsDir) then
+    CreateDir(FStaticAssetsDir);
 
   if not DirectoryExists(UserDataDir) then
     CreateDir(UserDataDir);
+
+  DefaultStyleSheet := GetAssetPath(DEFAULT_STYLE_SHEET);
+  DefaultDarkStyleSheet := GetAssetPath(DEFAULT_DARK_STYLE_SHEET);
+
+  if not FileExists(DefaultStyleSheet) then
+    CopyFileW(PWChar(ChangeFilePath(DEFAULT_STYLE_SHEET, TModulePath.DLL)),
+      PWChar(DefaultStyleSheet), True);
+
+  if not FileExists(DefaultDarkStyleSheet) then
+    CopyFileW(PWChar(ChangeFilePath(DEFAULT_DARK_STYLE_SHEET, TModulePath.DLL)),
+      PWChar(DefaultDarkStyleSheet), True);
 
   try
     GlobalWebView2Loader := TWVLoader.Create(nil);
@@ -191,9 +270,8 @@ var
 begin
   try
     HIniFile := THandle(-1);
-    FullPath := Npp.ConfigDir + '\PreviewHTML\' + Filename;
+    FullPath := FSettingsDir + Filename;
     if not FileExists(FullPath) then begin
-      CreateDir(Npp.ConfigDir + '\PreviewHTML');
       ConfigSample := ChangeFileExt(Filename, '.sample' + ExtractFileExt(FullPath));
       DllSample := ExtractFilePath(TModulePath.DLLFullName) + ConfigSample;
       if FileExists(DllSample) then
@@ -280,9 +358,14 @@ end {TNppPluginPreviewHTML.CommandShowPreview};
 { ------------------------------------------------------------------------------------------------ }
 function TNppPluginPreviewHTML.GetSettings(const Name: WideString): TUtf8IniFile;
 begin
-  ForceDirectories(ConfigDir + '\PreviewHTML');
-  Result := TUtf8IniFile.Create(ConfigDir + '\PreviewHTML\' + Name);
+  Result := TUtf8IniFile.Create(FSettingsDir + Name);
 end {TNppPluginPreviewHTML.GetSettings};
+
+{ ------------------------------------------------------------------------------------------------ }
+function TNppPluginPreviewHTML.GetAssetPath(const Name, Mime: string): WideString;
+begin
+  Result := ChangeFilePath(nppString(ChangeFileExt(Name, Mime)), FStaticAssetsDir);
+end {TNppPluginPreviewHTML.GetAssetPath};
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TNppPluginPreviewHTML.BeNotified(sn: PSciNotification);
@@ -366,9 +449,16 @@ end {TNppPluginPreviewHTML.DoNppnToolbarModification};
 procedure TNppPluginPreviewHTML.DoNppnBufferActivated(const BufferID: NativeUInt);
 begin
   inherited;
+  if WideSameText(FSettingsDir+'Settings.ini', GetCurrentBufferPath(BufferID)) then
+    Exit;
   if Assigned(frmHTMLPreview) and frmHTMLPreview.Visible then begin
     frmHTMLPreview.ReloadSettings;
     frmHTMLPreview.btnRefresh.Click;
+  end;
+  with GetSettings() do begin
+    SetMenuItemState(StyleDlgId, ReadBool(SECTION_CSS, 'Disable', False));
+    SetMenuItemState(ScriptDlgId, not SectionExists(SECTION_JS));
+    Free;
   end;
 end {TNppPluginPreviewHTML.DoNppnBufferActivated};
 

@@ -77,6 +77,8 @@ type
     FBufferID: TBufferID;
     FScrollPositions: TDictionary<TBufferID,TPoint>;
     FFilterThread: TCustomFilterThread;
+    FDefaultStyleSheet, FDefaultScript: wvString;
+    FHasDefaultStyle, FHasDefaultScript: Boolean;
     FEnsureRendered: Boolean;
     FPreserveScrollPosition: Boolean;
 
@@ -130,6 +132,7 @@ uses
 
 const
   APP_DOMAIN = 'preview.host';
+  ASSET_DOMAIN = 'preview.static';
   RESTORE_SCRIPT_ID = $7F;
   PLACEHOLDER_CONTENT =
     '<html>' +
@@ -145,6 +148,25 @@ const
     '   return;' +
     ' document.body.style.setProperty("background-color", "#fff");' +
     '}, 120);';
+  INJECT_USER_STYLE = 'window.setTimeout(() => {' +
+    ' if (Array.prototype.slice.call(document.styleSheets).length > 0) {' +
+    '   return;' +
+    ' }' +
+    ' try {' +
+    '   let style = document.createElement("link");' +
+    '   style.rel = "stylesheet";' +
+    '   style.href = "%s";' +
+    '   document.head.insertBefore(style, document.head.firstElementChild);' +
+    ' } catch (_) { }' +
+    '}, 0);';
+  INJECT_USER_SCRIPT = 'window.setTimeout(() => {' +
+    ' try {' +
+    '   let js = document.createElement("script");' +
+    '   js.src = "%s";' +
+    '   js.defer = true;' +
+    '   document.body.insertAdjacentElement("afterend", js);' +
+    ' } catch (_) { }' +
+    '}, 0);';
 
 function JsonEncode(const AString: wvstring): wvstring;
 begin
@@ -448,6 +470,9 @@ ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy({$ifdef 
           HeadStart := 1;
         Insert('<base href="' + WideFormat('https://%s/%s', [APP_DOMAIN, ExtractFileName(Filename)]) + '" />', HTML, HeadStart);
         wbIE.SetVirtualHostNameToFolderMapping(APP_DOMAIN, ExtractFileDir(Filename), COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW);
+        if FHasDefaultStyle or FHasDefaultScript then
+          wbIE.SetVirtualHostNameToFolderMapping(ASSET_DOMAIN,
+            TNppPluginPreviewHTML(Npp).AssetDir, COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW);
         ContentStream.Text := HTML;
       end;
 
@@ -469,6 +494,12 @@ ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy({$ifdef 
     if IsHTML then
     begin
       wbIE.ExecuteScript(SET_DEFAULT_BACKGROUND_JS);
+      if FHasDefaultStyle then
+        wbIE.ExecuteScript(WideFormat(INJECT_USER_STYLE,
+          [WideFormat('https://%s/%s', [ASSET_DOMAIN, ExtractFileName(FDefaultStyleSheet)])]));
+      if FHasDefaultScript then
+        wbIE.ExecuteScript(WideFormat(INJECT_USER_SCRIPT,
+          [WideFormat('https://%s/%s', [ASSET_DOMAIN, ExtractFileName(FDefaultScript)])]));
       FBufferID := BufferID;
     end;
   except
@@ -615,11 +646,57 @@ end {TfrmHTMLPreview.ForgetBuffer};
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TfrmHTMLPreview.ReloadSettings;
+var
+  AssetName, ExtFilter: string;
 begin
   with TNppPluginPreviewHTML(Npp).GetSettings() do begin
     FPreserveScrollPosition := ReadBool('Scroll', 'Sticky', True);
     tmrAutorefresh.Interval := ReadInteger('Autorefresh', 'Interval', tmrAutorefresh.Interval);
-    Free;
+    try
+      if ReadBool(SECTION_CSS, 'Disable', False) then
+        FDefaultStyleSheet := ''
+      else begin
+        if not SectionExists(SECTION_CSS) or not ValueExists(SECTION_CSS, VAL_FNAME) then begin
+          AssetName := DEFAULT_STYLE_SHEET;
+          if (wbIE <> nil) then begin
+            case wbIE.PreferredColorScheme of
+              COREWEBVIEW2_PREFERRED_COLOR_SCHEME_AUTO:
+                if Npp.IsDarkModeEnabled then
+                  AssetName := DEFAULT_DARK_STYLE_SHEET;
+              COREWEBVIEW2_PREFERRED_COLOR_SCHEME_DARK:
+                AssetName := DEFAULT_DARK_STYLE_SHEET;
+            end;
+          end;
+          FDefaultStyleSheet := TNppPluginPreviewHTML(Npp).GetAssetPath(AssetName);
+        end else begin
+          AssetName := Trim(ReadString(SECTION_CSS, VAL_FNAME, ''));
+          FDefaultStyleSheet := TNppPluginPreviewHTML(Npp).GetAssetPath(ExtractFileName(AssetName));
+        end;
+        { Check file extension filter }
+        if ValueExists(SECTION_CSS, VAL_EXT) then begin
+          ExtFilter := Trim(ReadString(SECTION_CSS, VAL_EXT, VAL_EXT_ANY));
+          if (ExtFilter <> VAL_EXT_ANY) and (Pos(LowerCase(Npp.GetCurrentFileExt()), ExtFilter) = 0) then
+            FDefaultStyleSheet := '';
+        end;
+      end;
+      if not SectionExists(SECTION_JS) or ReadBool(SECTION_JS, 'Disable', False) then
+        FDefaultScript := ''
+      else begin
+        AssetName := Trim(ReadString(SECTION_JS, VAL_FNAME, ''));
+        FDefaultScript := TNppPluginPreviewHTML(Npp).GetAssetPath(ExtractFileName(AssetName), '.js');
+        if ValueExists(SECTION_JS, VAL_EXT) then begin
+          ExtFilter := Trim(ReadString(SECTION_JS, VAL_EXT, VAL_EXT_ANY));
+          if (ExtFilter <> VAL_EXT_ANY) and (Pos(LowerCase(Npp.GetCurrentFileExt()), ExtFilter) = 0) then
+            FDefaultScript := '';
+        end;
+      end;
+    finally
+      Free;
+    end;
+    FHasDefaultStyle := FileExists(FDefaultStyleSheet);
+    FHasDefaultScript := FileExists(FDefaultScript);
+    if FHasDefaultScript and (wbIE <> nil) then
+      wbIE.ScriptEnabled := True;
   end;
 end {TfrmHTMLPreview.ReloadSettings};
 
@@ -644,13 +721,10 @@ var
   Filespec: string;
 begin
   DocFileName := Npp.GetCurrentBufferPath;
-
   DocLangType := -1;
   DocLanguage := '';
   Result := String.Empty;
-
-  ForceDirectories(TNppPluginPreviewHTML(Npp).ConfigDir + '\PreviewHTML');
-  Filters := TUtf8IniFile.Create(TNppPluginPreviewHTML(Npp).ConfigDir + '\PreviewHTML\Filters.ini');
+  Filters := TNppPluginPreviewHTML(Npp).GetSettings('Filters.ini');
   Names := TStringList.Create;
   try
     Filters.ReadSections(Names);
@@ -663,14 +737,14 @@ begin
       Match := False;
 
       {--- Martijn 03-03-2013: Test file name ---}
-      Filespec := Trim(Filters.ReadString(Names[i], 'Filename', ''));
+      Filespec := Trim(Filters.ReadString(Names[i], VAL_FNAME, ''));
       if (Filespec <> '') then begin
         // http://docwiki.embarcadero.com/Libraries/XE2/en/System.Masks.MatchesMask#Description
         Match := Match or MatchesMask({$ifdef FPC}UTF8Encode{$endif}(ExtractFileName(DocFileName)), Filespec);
       end;
 
       {--- MCO 22-01-2013: Test extension ---}
-      Ext := Trim(Filters.ReadString(Names[i], 'Extension', ''));
+      Ext := Trim(Filters.ReadString(Names[i], VAL_EXT, ''));
       if (Ext <> '') then begin
         Extensions := TStringList.Create;
         try
