@@ -15,7 +15,7 @@
 ::
 SETLOCAL
 
-set "VERSION=1.4.2.1"
+set "VERSION=1.4.3.0"
 set "PLUGIN=PreviewHTML"
 set "CONFIG_DIR=.\src\Config"
 set "FPC_DIR=.\out\3RD-PARTY"
@@ -36,8 +36,8 @@ xcopy /DIY ReleaseNotes.txt .\out
 xcopy /DIY src\common\COPYING* %FPC_DIR%
 @rem echo D | xcopy /DIY src\Microsoft.Web.WebView2\ "%FPC_DIR%\Microsoft.Web.WebView2"
 echo D | xcopy /DIY src\WebView4Delphi\LICENSE "%FPC_DIR%\WebView4Delphi"
-7z a -tzip "%SLUG%" "%PLUGIN_DLLS%" .\out\*.txt %CONFIG_DIR%\*.ini %FPC_DIR% -y
-7z a -tzip "%SLUGX64%" "%PLUGINX64_DLLS%" .\out\*.txt %CONFIG_DIR%\*.ini %FPC_DIR% -y
+7z a -tzip "%SLUG%" "%PLUGIN_DLLS%" .\out\*.txt %CONFIG_DIR%\*.* %FPC_DIR% -y
+7z a -tzip "%SLUGX64%" "%PLUGINX64_DLLS%" .\out\*.txt %CONFIG_DIR%\*.* %FPC_DIR% -y
 popd
 
 ENDLOCAL

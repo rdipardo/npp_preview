@@ -1,6 +1,18 @@
 Preview HTML plugin for Notepad++
 =================================
 
+v1.4.3.0, 2025-12-18
+--------------------
+- Fixed: resolved an edge case where the preview background would become solid black in dark app mode
+- Changed: the minimum required version of `msedgewebview2.exe` is no longer strictly enforced (may prevent issues like [#6])
+- Added: pages with no user-defined CSS will by styled with a default light or dark theme
+- Added: new configuration options for:
+
+    * overriding the default style theme
+    * inserting a JavaScript file that runs during previews
+
+    Visit [the wiki](https://github.com/rdipardo/npp_preview/wiki/Settings#style-javascript) to learn more.
+
 v1.4.2.1, 2025-12-05
 --------------------
 - Fixed: previews render with a white default background even when dark app mode is enabled ([MicrosoftEdge/WebView2Feedback#5454])
@@ -95,12 +107,13 @@ v1.1.0.0, 2013-01-20
 [#3]: https://github.com/rdipardo/npp_preview/issues/3
 [#4]: https://github.com/rdipardo/npp_preview/issues/4
 [#5]: https://github.com/rdipardo/npp_preview/issues/5
+[#6]: https://github.com/rdipardo/npp_preview/issues/6
 [wiki homepage]: https://github.com/rdipardo/npp_preview/wiki
 [a017892ab7]: https://fossil.2of4.net/npp_preview/tktview/a017892ab7
 [cfc74baf4b]: https://fossil.2of4.net/npp_preview/tktview/cfc74baf4b
 [20d1203257]: https://fossil.2of4.net/npp_preview/tktview/20d1203257
 [1b34ee74aa]: https://fossil.2of4.net/npp_preview/tktview/1b34ee74aa
-[MicrosoftEdge/WebView2Feedback#5392]: https://github.com/MicrosoftEdge/WebView2Feedback/issues/5454
+[MicrosoftEdge/WebView2Feedback#5454]: https://github.com/MicrosoftEdge/WebView2Feedback/issues/5454
 
 <!--
      vim: ft=markdown

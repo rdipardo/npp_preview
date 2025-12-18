@@ -1,6 +1,7 @@
 * text=auto
 *.cmd     eol=crlf
 src/**    eol=crlf
+*.css     eol=lf
 src/lib   -diff -text
 src/WebView4Delphi -diff -text
 *.bmp     -diff -text
