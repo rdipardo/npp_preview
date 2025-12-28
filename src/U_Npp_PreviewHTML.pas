@@ -457,7 +457,7 @@ begin
   end;
   with GetSettings() do begin
     SetMenuItemState(StyleDlgId, ReadBool(SECTION_CSS, 'Disable', False));
-    SetMenuItemState(ScriptDlgId, not SectionExists(SECTION_JS));
+    SetMenuItemState(ScriptDlgId, not SectionExists(SECTION_JS) or ReadBool(SECTION_JS, 'Disable', False));
     Free;
   end;
 end {TNppPluginPreviewHTML.DoNppnBufferActivated};

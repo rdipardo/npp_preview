@@ -53,8 +53,8 @@ jobs:
             - run:
                name: Prepare Artifacts
                command: |
-                 7z a -tzip << pipeline.parameters.plugin_name >>_x64.zip ./src/config/*.ini ./out/x86_64-win64/Release/*.dll
-                 7z a -tzip << pipeline.parameters.plugin_name >>_win32.zip ./src/config/*.ini ./out/i386-win32/Release/*.dll
+                 7z a -tzip << pipeline.parameters.plugin_name >>_x64.zip ./src/config/*.* ./out/x86_64-win64/Release/*.dll
+                 7z a -tzip << pipeline.parameters.plugin_name >>_win32.zip ./src/config/*.* ./out/i386-win32/Release/*.dll
             - store_artifacts:
                 name: Upload << pipeline.parameters.plugin_name >>_win32.zip
                 path: << pipeline.parameters.plugin_name >>_win32.zip
