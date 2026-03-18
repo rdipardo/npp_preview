@@ -1,5 +1,9 @@
 unit U_Npp_PreviewHTML;
 
+{$ifdef FPC}
+  {$unitpath common}
+{$endif}
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 {$WARN SYMBOL_PLATFORM OFF}
 interface
@@ -12,8 +16,10 @@ uses
   Forms,
 {$endif}
   SysUtils, Windows, Utf8IniFiles,
+  customstreams,
+  NppForms,
   NppPlugin,
-  F_About, F_PreviewHTML;
+  F_About, F_wvPreview, F_iePreview;
 
 const
   SCLEX_HTML  = 4;
@@ -29,17 +35,23 @@ const
 type
   TNppPluginPreviewHTML = class(TNppPlugin)
   private
+    FPreviewForm: TNppForm;
     FSettingsDir, FStaticAssetsDir: nppString;
+    FCanUseWebView2: Boolean;
     function Caption: nppString;
     function UserAgentString: nppstring;
+    function IsWebView2Installed: Boolean;
+    function TryCast<TForm: TNppForm>(out AForm: TForm): Boolean;
     procedure AddFuncSeparator;
     procedure SetMenuItemState(const Id: Integer; Disable: Boolean);
+    procedure CommandSetIEVersion(const BrowserEmulation: Integer);
   public
     constructor Create;
 
     procedure SetInfo(NppData: TNppData); override;
 
-    procedure CommandShowPreview;
+    procedure CommandShowPreviewInIE;
+    procedure CommandShowPreviewInWebView2;
     procedure CommandOpenFile(const Filename: nppString);
     procedure CommandShowAbout;
 
@@ -53,6 +65,7 @@ type
     function  GetAssetPath(const Name: string; const Mime: string = '.css'): WideString;
     function  GetSettings(const Name: WideString = 'Settings.ini'): TUtf8IniFile;
 
+    property UsingMsEdge: Boolean read FCanUseWebView2;
     property ConfigDir: nppString read FSettingsDir;
     property AssetDir: nppString read FStaticAssetsDir;
   end {TNppPluginPreviewHTML};
@@ -68,15 +81,18 @@ procedure _FuncShowAbout; cdecl;
 
 var
   Npp: TNppPluginPreviewHTML;
+  ContentStream: TUnicodeStream;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 implementation
 uses
   Classes,
+  Registry,
   Graphics,
 {$ifndef FPC}
   Imaging.pngimage,
 {$endif}
+  WebBrowser,
   uWVLoader,
   uWVTypeLibrary,
   ModulePath,
@@ -147,7 +163,35 @@ end;
 { ------------------------------------------------------------------------------------------------ }
 procedure _FuncShowPreview; cdecl;
 begin
-  Npp.CommandShowPreview;
+  if Npp.UsingMsEdge then
+    Npp.CommandShowPreviewInWebView2
+  else
+    Npp.CommandShowPreviewInIE;
+end;
+{ ------------------------------------------------------------------------------------------------ }
+procedure _FuncSetIE7; cdecl;
+begin
+  Npp.CommandSetIEVersion(7000);
+end;
+{ ------------------------------------------------------------------------------------------------ }
+procedure _FuncSetIE8; cdecl;
+begin
+  Npp.CommandSetIEVersion(8000);
+end;
+{ ------------------------------------------------------------------------------------------------ }
+procedure _FuncSetIE9; cdecl;
+begin
+  Npp.CommandSetIEVersion(9000);
+end;
+{ ------------------------------------------------------------------------------------------------ }
+procedure _FuncSetIE10; cdecl;
+begin
+  Npp.CommandSetIEVersion(10000);
+end;
+{ ------------------------------------------------------------------------------------------------ }
+procedure _FuncSetIE11; cdecl;
+begin
+  Npp.CommandSetIEVersion(11000);
 end;
 
 
@@ -160,6 +204,41 @@ begin
   inherited;
   self.PluginName := '&Preview HTML'{$IFDEF DEBUG}+' (debug)'{$ENDIF};
 end {TNppPluginPreviewHTML.Create};
+
+{ ------------------------------------------------------------------------------------------------ }
+function TNppPluginPreviewHTML.IsWebView2Installed: Boolean;
+const
+  SubKeyx86 = 'SOFTWARE\Microsoft';
+  SubKeyx64 = 'SOFTWARE\WOW6432Node\Microsoft';
+var
+  SysInfo: TSystemInfo;
+  RegKey: TRegistry;
+  RegValues: TStringList;
+  SubKeyPath: WideString;
+begin
+  Result := False;
+  try
+    RegValues := TStringList.Create;
+    RegKey := TRegistry.Create(KEY_READ);
+    RegKey.RootKey := HKEY_LOCAL_MACHINE;
+    SubKeyPath := WideFormat('%s\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}', [SubKeyx64]);
+    SysInfo := Default(TSystemInfo);
+
+    GetSystemInfo(SysInfo);
+    if SysInfo.wProcessorArchitecture = PROCESSOR_ARCHITECTURE_INTEL then
+      SubKeyPath := WideFormat('%s\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}', [SubKeyx86]);
+
+    if RegKey.KeyExists(SubKeyPath) and RegKey.OpenKeyReadOnly(SubKeyPath) then
+      RegKey.GetValueNames(RegValues);
+
+    if (RegValues.IndexOf('Location') > -1) and (RegValues.IndexOf('Pv') > -1) then
+      Result := FileExists(WideFormat('%s\%s\msedgewebview2.exe', [RegKey.ReadString('Location'), RegKey.ReadString('Pv')]));
+  finally
+    RegKey.CloseKey;
+    FreeAndNil(RegKey);
+    FreeAndNil(RegValues);
+  end;
+end {TNppPluginPreviewHTML.IsWebView2Installed};
 
 { ------------------------------------------------------------------------------------------------ }
 function TNppPluginPreviewHTML.Caption: nppString;
@@ -200,26 +279,80 @@ begin
 end;
 
 { ------------------------------------------------------------------------------------------------ }
+function TNppPluginPreviewHTML.TryCast<TForm>(out AForm: TForm): Boolean;
+begin
+  Result := (FPreviewForm is TForm);
+  if Result then
+    AForm := TForm(FPreviewForm)
+  else
+    AForm := nil;
+end;
+
+{ ------------------------------------------------------------------------------------------------ }
 procedure TNppPluginPreviewHTML.SetInfo(NppData: TNppData);
 var
   UserDataDir: WideString;
   DefaultStyleSheet, DefaultDarkStyleSheet: WideString;
+  IEVersion: string;
+  MajorIEVersion, EmulatedVersion, ParseResult, FnIndex: Integer;
   Psk: PShortcutKey;
 begin
   inherited;
 
   Psk := MakeShortcutKey(True, False, True, Ord('H'));   // Ctrl-Shift-H
   self.AddFuncItem('&Preview HTML', _FuncShowPreview, Psk);
+
+  FSettingsDir := GetPluginsConfigDir() + '\PreviewHTML\';
+  with GetSettings() do begin
+    IEVersion := ReadString('Emulation', 'Installed IE version', {$ifdef FPC}UTF8Encode{$endif}(GetIEVersion));
+    FCanUseWebView2 := not ReadBool('Emulation', 'NoEdge', False);
+    Free;
+  end;
+
+  FCanUseWebView2 := FCanUseWebView2 and IsWebView2Installed;
+  if not FCanUseWebView2 then begin
+    if Pos('.', IEVersion) <> 0 then
+      IEVersion := Copy(IEVersion, 1, Pos('.', IEVersion) - 1);
+    Val(IEVersion, MajorIEVersion, ParseResult);
+    if (ParseResult <> 0) then
+      MajorIEVersion := 0;
+    EmulatedVersion := GetBrowserEmulation div 1000;
+
+    if MajorIEVersion >= 7 then begin
+      self.AddFuncSeparator;
+      FnIndex := self.AddFuncItem('View as IE&7', _FuncSetIE7);
+      FuncArray[FnIndex].Checked := LongBool(EmulatedVersion = 7);
+    end;
+    if MajorIEVersion >= 8 then begin
+      FnIndex := self.AddFuncItem('View as IE&8', _FuncSetIE8);
+      FuncArray[FnIndex].Checked := LongBool(EmulatedVersion = 8);
+    end;
+    if MajorIEVersion >= 9 then begin
+      FnIndex := self.AddFuncItem('View as IE&9', _FuncSetIE9);
+      FuncArray[FnIndex].Checked := LongBool(EmulatedVersion = 9);
+    end;
+    if MajorIEVersion >= 10 then begin
+      FnIndex := self.AddFuncItem('View as IE1&0', _FuncSetIE10);
+      FuncArray[FnIndex].Checked := LongBool(EmulatedVersion = 10);
+    end;
+    if MajorIEVersion >= 11 then begin
+      FnIndex := self.AddFuncItem('View as IE1&1', _FuncSetIE11);
+      FuncArray[FnIndex].Checked := LongBool(EmulatedVersion = 11);
+    end;
+  end;
+
   self.AddFuncItem('Edit &settings', _FuncOpenSettings);
   self.AddFuncItem('Edit &filter definitions', _FuncOpenFilters);
-  StyleDlgId := self.AddFuncItem('Edit default &CSS', _FuncOpenDefaultStyleSheet);
-  ScriptDlgId := self.AddFuncItem('Edit default &JavaScript', _FuncOpenUserScript);
+
+  if FCanUseWebView2 then begin
+    StyleDlgId := self.AddFuncItem('Edit default &CSS', _FuncOpenDefaultStyleSheet);
+    ScriptDlgId := self.AddFuncItem('Edit default &JavaScript', _FuncOpenUserScript);
+  end;
 
   self.AddFuncSeparator;
 
   self.AddFuncItem('&About', _FuncShowAbout);
 
-  FSettingsDir := GetPluginsConfigDir() + '\PreviewHTML\';
   FStaticAssetsDir := FSettingsDir + 'Static';
   UserDataDir := FSettingsDir + 'WebView2Cache';
 
@@ -242,6 +375,9 @@ begin
   if not FileExists(DefaultDarkStyleSheet) then
     CopyFileW(PWChar(ChangeFilePath(DEFAULT_DARK_STYLE_SHEET, TModulePath.DLL)),
       PWChar(DefaultDarkStyleSheet), True);
+
+  if not FCanUseWebView2 then
+    Exit;
 
   try
     GlobalWebView2Loader := TWVLoader.Create(nil);
@@ -303,6 +439,8 @@ procedure TNppPluginPreviewHTML.CommandShowAbout;
 {$endif}
 var
   FrmParent: TComponent;
+  iePreviemFrm: TFrmIEPreview;
+  wvPreviemFrm: TFrmWebView2Preview;
   CheckState: Boolean;
 begin
 {$ifdef FPC}
@@ -310,12 +448,19 @@ begin
     Exit;
 {$endif}
   FrmParent := Nil;
+  iePreviemFrm := Nil;
+  wvPreviemFrm := Nil;
   CheckState := False;
-  if Assigned(frmHTMLPreview) then
+  if (TryCast<TFrmIEPreview>(iePreviemFrm)) then
   begin
-    FrmParent := TComponent(frmHTMLPreview);
-    CheckState := frmHTMLPreview.chkFreeze.Checked;
-    frmHTMLPreview.chkFreeze.Checked := True;
+    FrmParent := TComponent(iePreviemFrm);
+    CheckState := iePreviemFrm.chkFreeze.Checked;
+    iePreviemFrm.chkFreeze.Checked := True;
+  end else if (TryCast<TFrmWebView2Preview>(wvPreviemFrm)) then
+  begin
+    FrmParent := TComponent(wvPreviemFrm);
+    CheckState := wvPreviemFrm.chkFreeze.Checked;
+    wvPreviemFrm.chkFreeze.Checked := True;
   end;
   AboutForm := TAboutForm.Create(FrmParent);
   with AboutForm do begin
@@ -328,32 +473,74 @@ begin
     Free;
   end;
   AboutForm := nil;
-  if Assigned(frmHTMLPreview) then
-    frmHTMLPreview.chkFreeze.Checked := CheckState;
+  if Assigned(iePreviemFrm) then
+    iePreviemFrm.chkFreeze.Checked := CheckState
+  else if Assigned(wvPreviemFrm) then
+    wvPreviemFrm.chkFreeze.Checked := CheckState;
 end {TNppPluginPreviewHTML.CommandShowAbout};
 
 { ------------------------------------------------------------------------------------------------ }
-procedure TNppPluginPreviewHTML.CommandShowPreview;
+procedure TNppPluginPreviewHTML.CommandShowPreviewInWebView2;
 begin
   if GlobalWebView2Loader.InitializationError then begin
     Exit;
   end;
-  if (not Assigned(frmHTMLPreview)) then begin
+  if (not Assigned(frmWV2Preview)) then begin
 {$ifdef FPC}
-    Application.CreateForm(TfrmHTMLPreview, frmHTMLPreview);
+    Application.CreateForm(TFrmWebView2Preview, frmWV2Preview);
 {$else}
-    frmHTMLPreview := TfrmHTMLPreview.Create(self);
+    frmWV2Preview := TFrmWebView2Preview.Create(self);
 {$endif}
-    frmHTMLPreview.Show(self, ncDlgId);
+    FPreviewForm := TNppForm(frmWV2Preview);
+    frmWV2Preview.Show(self, ncDlgId);
   end else begin
-      if frmHTMLPreview.Visible then begin
-        frmHTMLPreview.btnClose.Click;
+      if frmWV2Preview.Visible then begin
+        frmWV2Preview.btnClose.Click;
         Exit;
       end;
-      frmHTMLPreview.Show
+      frmWV2Preview.Show
   end;
-    frmHTMLPreview.btnRefresh.Click;
-end {TNppPluginPreviewHTML.CommandShowPreview};
+    frmWV2Preview.btnRefresh.Click;
+end {TNppPluginPreviewHTML.CommandShowPreviewInWebView2};
+
+{ ------------------------------------------------------------------------------------------------ }
+procedure TNppPluginPreviewHTML.CommandShowPreviewInIE;
+begin
+  if (not Assigned(frmIEPreview)) then begin
+{$ifdef FPC}
+    Application.CreateForm(TFrmIEPreview, frmIEPreview);
+{$else}
+    frmIEPreview := TFrmIEPreview.Create(self);
+{$endif}
+    FPreviewForm := TNppForm(frmIEPreview);
+    frmIEPreview.Show(self, ncDlgId);
+  end else begin
+      if frmIEPreview.Visible then begin
+        frmIEPreview.btnClose.Click;
+        Exit;
+      end;
+      frmIEPreview.Show
+  end;
+    frmIEPreview.btnRefresh.Click;
+end {TNppPluginPreviewHTML.CommandShowPreviewInIE};
+
+{ ------------------------------------------------------------------------------------------------ }
+procedure TNppPluginPreviewHTML.CommandSetIEVersion(const BrowserEmulation: Integer);
+begin
+  if GetBrowserEmulation <> BrowserEmulation then begin
+    SetBrowserEmulation(BrowserEmulation);
+    MessageBoxW(Npp.NppData.NppHandle,
+                PWideChar(WideFormat('The preview browser mode has been set to correspond to Internet Explorer version %d.'#13#10#13#10 +
+                             'Please restart Notepad++ for the new browser mode to be taken into account.',
+                             [BrowserEmulation div 1000])),
+                PWideChar(Self.Caption), MB_ICONWARNING);
+  end else begin
+    MessageBoxW(Npp.NppData.NppHandle,
+                PWideChar(WideFormat('The preview browser mode was already set to Internet Explorer version %d.',
+                             [BrowserEmulation div 1000])),
+                PWideChar(Self.Caption), MB_ICONINFORMATION);
+  end;
+end {TNppPluginPreviewHTML.CommandSetIEVersion};
 
 { ------------------------------------------------------------------------------------------------ }
 function TNppPluginPreviewHTML.GetSettings(const Name: WideString): TUtf8IniFile;
@@ -369,20 +556,28 @@ end {TNppPluginPreviewHTML.GetAssetPath};
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TNppPluginPreviewHTML.BeNotified(sn: PSciNotification);
+var
+  iePreviemFrm: TFrmIEPreview;
+  wvPreviemFrm: TFrmWebView2Preview;
 begin
   inherited;
   if HWND(sn^.nmhdr.hwndFrom) = self.NppData.NppHandle then begin
-    if (sn^.nmhdr.code = NPPN_READY) and GlobalWebView2Loader.InitializationError then
+    if (sn^.nmhdr.code = NPPN_READY) and Assigned(GlobalWebView2Loader)
+      and GlobalWebView2Loader.InitializationError then begin
         EnableMenuItem(GetMenu(NppData.nppHandle), CmdIdFromDlgId(ncDlgId),
-          MF_BYCOMMAND or MF_DISABLED or MF_GRAYED)
-    else
+          MF_BYCOMMAND or MF_DISABLED or MF_GRAYED);
+        Exit;
+    end else
     if (sn^.nmhdr.code = NPPN_DARKMODECHANGED) then begin
-      if Assigned(FrmHTMLPreview) then FrmHTMLPreview.ToggleDarkMode;
+      if (TryCast<TFrmIEPreview>(iePreviemFrm)) then iePreviemFrm.ToggleDarkMode
+      else if (TryCast<TFrmWebView2Preview>(wvPreviemFrm)) then wvPreviemFrm.ToggleDarkMode;
       if Assigned(AboutForm) then AboutForm.ToggleDarkMode;
     end;
   end else if (sn^.nmhdr.code = SCN_AUTOCCOMPLETED) then begin
-    if Assigned(frmHTMLPreview) and frmHTMLPreview.Visible then
-      frmHTMLPreview.btnRefresh.Click;
+    if (TryCast<TFrmIEPreview>(iePreviemFrm)) and iePreviemFrm.Visible then
+      iePreviemFrm.btnRefresh.Click
+    else if (TryCast<TFrmWebView2Preview>(wvPreviemFrm)) and wvPreviemFrm.Visible then
+      wvPreviemFrm.btnRefresh.Click;
   end;
 end {TNppPluginPreviewHTML.BeNotified};
 
@@ -451,10 +646,15 @@ begin
   inherited;
   if WideSameText(FSettingsDir+'Settings.ini', GetCurrentBufferPath(BufferID)) then
     Exit;
-  if Assigned(frmHTMLPreview) and frmHTMLPreview.Visible then begin
-    frmHTMLPreview.ReloadSettings;
-    frmHTMLPreview.btnRefresh.Click;
+  if Assigned(frmIEPreview) and frmIEPreview.Visible then begin
+    frmIEPreview.ReloadSettings;
+    frmIEPreview.btnRefresh.Click;
+  end else if Assigned(frmWV2Preview) and frmWV2Preview.Visible then begin
+    frmWV2Preview.ReloadSettings;
+    frmWV2Preview.btnRefresh.Click;
   end;
+  if not FCanUseWebView2 then
+    Exit;
   with GetSettings() do begin
     SetMenuItemState(StyleDlgId, ReadBool(SECTION_CSS, 'Disable', False));
     SetMenuItemState(ScriptDlgId, not SectionExists(SECTION_JS) or ReadBool(SECTION_JS, 'Disable', False));
@@ -465,8 +665,10 @@ end {TNppPluginPreviewHTML.DoNppnBufferActivated};
 { ------------------------------------------------------------------------------------------------ }
 procedure TNppPluginPreviewHTML.DoNppnFileClosed(const BufferID: NativeUInt);
 begin
-  if Assigned(frmHTMLPreview) then begin
-    frmHTMLPreview.ForgetBuffer(BufferID);
+  if Assigned(frmIEPreview) then begin
+    frmIEPreview.ForgetBuffer(BufferID)
+  end else if Assigned(frmWV2Preview) then begin
+    frmWV2Preview.ForgetBuffer(BufferID);
   end;
   inherited;
 end {TNppPluginPreviewHTML.DoNppnFileClosed};
@@ -480,15 +682,20 @@ begin
     DoNppnFileClosed(SendNppMessage(NPPM_GETBUFFERIDFROMPOS, I, PRIMARY_VIEW));
   for I:=0 to SendNppMessage(NPPM_GETNBOPENFILES, 0, SECOND_VIEW) do
     DoNppnFileClosed(SendNppMessage(NPPM_GETBUFFERIDFROMPOS, I, SECOND_VIEW));
-  if Assigned(frmHTMLPreview) then
-    KillTimer(frmHTMLPreview.Handle, frmHTMLPreview.PrevTimerID);
+  if Assigned(frmIEPreview) then
+    KillTimer(frmIEPreview.Handle, frmIEPreview.PrevTimerID)
+  else if Assigned(frmWV2Preview) then
+    KillTimer(frmWV2Preview.Handle, frmWV2Preview.PrevTimerID);
 end {TNppPluginPreviewHTML.DoNppnShutdown};
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TNppPluginPreviewHTML.DoModified(const hwnd: HWND; const modificationType: Integer);
 begin
-  if Assigned(frmHTMLPreview) and frmHTMLPreview.Visible and (modificationType and (SC_MOD_INSERTTEXT or SC_MOD_DELETETEXT) <> 0) then begin
-    frmHTMLPreview.ResetTimer;
+  if (modificationType and (SC_MOD_INSERTTEXT or SC_MOD_DELETETEXT) <> 0) then begin
+    if Assigned(frmIEPreview) and frmIEPreview.Visible then
+      frmIEPreview.ResetTimer
+    else if Assigned(frmWV2Preview) and frmWV2Preview.Visible then
+      frmWV2Preview.ResetTimer;
   end;
   inherited;
 end {TNppPluginPreviewHTML.DoModified};
@@ -497,6 +704,7 @@ end {TNppPluginPreviewHTML.DoModified};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 initialization
+  ContentStream := TUnicodeStream.Create;
 {$ifdef FPC}
   Application.CaptureExceptions := True;
 {$ifdef VER3_2}
@@ -511,6 +719,7 @@ initialization
   end;
 
 finalization
+  FreeAndNil(ContentStream);
 {$ifndef FPC}
   if Assigned(ToolbarBmp) then
     FreeAndNil(ToolbarBmp);

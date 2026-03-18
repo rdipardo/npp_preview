@@ -1,5 +1,9 @@
 ﻿unit WebBrowser;
 
+{$ifdef FPC}
+  {$mode delphiunicode}
+{$endif}
+
 interface
 uses
   Classes, SHDocVw, MSHTML;
@@ -25,6 +29,22 @@ function GetIEVersion: string;
 implementation
 uses
   SysUtils, Forms, ActiveX, Variants, Registry, Windows, VersionInfo;
+
+{$ifdef FPC}
+function GetLongPathName(lpszShortPath: LPCWSTR; lpszLongPath: LPWSTR;
+  cchBuffer: DWORD): DWORD; stdcall; external 'kernel32.dll' Name 'GetLongPathNameW';
+
+function GetModuleFileName(hModule: HINST; lpFilename: LPWSTR; nSize: DWORD): DWORD;
+begin
+  Result := GetModuleFileNameW(hModule, lpFilename, nSize);
+end;
+
+function SearchPath(lpPath: LPCWSTR; lpFileName: LPCWSTR; lpExtension: LPCWSTR;
+  nBufferLength: DWORD; lpBuffer: LPWSTR; lpFilePart: LPWSTR): DWORD;
+begin
+  Result := SearchPathW(lpPath, lpFileName, lpExtension, nBufferLength, lpBuffer, lpFilePart);
+end;
+{$endif}
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TWBHelper.ExecJS(const Code: string);
@@ -150,7 +170,7 @@ end {SetBrowserEmulation};
 function GetIEVersion: string;
 var
   Exe: string;
-  Dummy: PChar;
+  Dummy: {$ifdef FPC} array[0..255] of WideChar {$else} PChar {$endif};
   VerInfo: TFileVersionInfo;
   Reg: TRegistry;
 begin
@@ -159,7 +179,7 @@ begin
   if Length(Exe) > 0 then begin
     VerInfo := TFileVersionInfo.Create(Exe);
     try
-      Result := Format('%d.%d.%d.%d', [VerInfo.MajorVersion, VerInfo.MinorVersion, VerInfo.Revision, VerInfo.Build]);
+      Result := WideFormat('%d.%d.%d.%d', [VerInfo.MajorVersion, VerInfo.MinorVersion, VerInfo.Revision, VerInfo.Build]);
       Exit;
     finally
       VerInfo.Free;

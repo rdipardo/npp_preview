@@ -35,7 +35,7 @@ object AboutForm: TAboutForm
     Top = 54
     Width = 206
     Height = 15
-    Caption = #169' 2025                           (current version)'
+    Caption = #169' 2026                           (current version)'
   end
   object lblAuthorContact: TLabel
     Left = 60
@@ -81,7 +81,7 @@ object AboutForm: TAboutForm
     Top = 96
     Width = 340
     Height = 15
-    Caption = 'Using WebView4Delphi, '#169' 2025 Salvador D'#237'az Fau, MIT License'
+    Caption = 'Using WebView4Delphi, '#169' 2026 Salvador D'#237'az Fau, MIT License'
   end
   object lblFcl: TLabel
     Left = 16

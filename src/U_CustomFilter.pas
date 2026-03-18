@@ -56,7 +56,9 @@ uses
   ProcessUnicode
 {$endif},
   Debug,
-  F_PreviewHTML;
+  F_iePreview,
+  F_wvPreview,
+  U_Npp_PreviewHTML;
 
 { TCustomFilterThread }
 
@@ -235,7 +237,8 @@ ODS('About to synchronize HTML of length %d in thread ID [%x]', [Length(HTML), G
     end;
 
 ODS('Cleaning up...');
-    frmHTMLPreview.sbrIE.Panels[0].Text := 'Done';
+    if Assigned(frmWV2Preview) then
+      frmWV2Preview.sbrIE.Panels[0].Text := 'Done';
     // Delete the temporary files
     if (InFile <> '') and not WideSameText(FData.DocFile, OutFile) then
       DeleteFile(OutFile);
@@ -351,8 +354,10 @@ end;
 procedure TCustomFilterThread.DoSynchronize;
 begin
 ODS('Synchronizing HTML of length %d in thread ID [%x]', [Length(ContentStream.Text), GetCurrentThreadID]);
-  if not frmHTMLPreview.UpdatePreview(FData.BufferID) then
-    frmHTMLPreview.DisplayPreview(FData.BufferID);
+  if Assigned(FrmIEPreview) then
+    FrmIEPreview.DisplayPreview(FData.BufferID)
+  else if Assigned(frmWV2Preview) and not frmWV2Preview.UpdatePreview(FData.BufferID) then
+    frmWV2Preview.DisplayPreview(FData.BufferID);
 end;
 
 end.

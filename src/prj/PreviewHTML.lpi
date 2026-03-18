@@ -65,7 +65,7 @@
         </CompilerOptions>
       </Item>
       <SharedMatrixOptions Count="1">
-        <Item1 ID="890710945042" Targets="#project,WebView4Delphi" Modes="Release" Value="-O3s"/>
+        <Item1 ID="890710945042" Targets="#project,WebView4Delphi,laz_shdocvw" Modes="Release" Value="-O3s -vm6058"/>
       </SharedMatrixOptions>
     </BuildModes>
     <PublishOptions>
@@ -79,6 +79,10 @@
       <Item>
         <PackageName Value="WebView4Delphi"/>
         <DefaultFilename Value="..\WebView4Delphi\packages\webview4delphi.lpk" Prefer="True"/>
+      </Item>
+      <Item>
+        <PackageName Value="laz_shdocvw"/>
+        <DefaultFilename Value="..\laz_shdocvw\laz_shdocvw.lpk" Prefer="True"/>
       </Item>
       <Item>
         <PackageName Value="LCL"/>
@@ -119,9 +123,16 @@
         <ResourceBaseClass Value="Form"/>
       </Unit>
       <Unit>
-        <Filename Value="..\F_PreviewHTML.pas"/>
+        <Filename Value="..\F_wvPreview.pas"/>
         <IsPartOfProject Value="True"/>
-        <ComponentName Value="frmHTMLPreview"/>
+        <ComponentName Value="FrmWebView2Preview"/>
+        <HasResources Value="True"/>
+        <ResourceBaseClass Value="Form"/>
+      </Unit>
+      <Unit>
+        <Filename Value="..\F_iePreview.pas"/>
+        <IsPartOfProject Value="True"/>
+        <ComponentName Value="FrmIEPreview"/>
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
       </Unit>

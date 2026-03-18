@@ -1,6 +1,9 @@
 [submodule "DelphiPluginTemplate"]
 	path = src/lib
-	url = https://bitbucket.org/rdipardo/delphiplugintemplate.git
+	url = https://github.com/rdipardo/delphiplugintemplate.git
 [submodule "WebView4Delphi"]
 	path = src/WebView4Delphi
 	url = https://github.com/salvadordf/WebView4Delphi.git
+[submodule "laz_shdocvw"]
+	path = src/laz_shdocvw
+	url = https://github.com/rdipardo/laz_shdocvw.git

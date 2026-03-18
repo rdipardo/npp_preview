@@ -1,5 +1,9 @@
 unit F_About;
 
+{$ifdef FPC}
+  {$unitpath common}
+{$endif}
+
 interface
 
 uses
@@ -47,6 +51,7 @@ uses
   httpprotocol,
 {$endif}
   VersionInfo, ModulePath, uWVLoader, uWVCoreWebView2Environment,
+  WebBrowser,
   NppPlugin;
 
 {$R *.dfm}
@@ -94,8 +99,15 @@ begin
       begin
         Font.Name := 'Tahoma';
         Left := Left - 2;
-      end else
+      end else begin
+{$ifdef FPC}
         Left := Left + 4;
+{$else}
+        Left := Left + 5;
+        lblLicense.Font.Height := -11;
+        lblFclLicense.Font.Height := -11;
+{$endif}
+      end;
     end;
   end;
 
@@ -103,6 +115,11 @@ begin
     FVersionStr := Format('v%d.%d.%d.%d (%d-bit)', [MajorVersion, MinorVersion, Revision, Build, SizeOf(NativeInt)*8]);
     lblPlugin.Caption := Format(lblPlugin.Caption, [FVersionStr]);
     Free;
+  end;
+
+  if not Assigned(GlobalWebView2Loader) then begin
+    lblIEVersion.Caption := Format('Internet Explorer version %s is installed.', [GetIEVersion]);
+    Exit;
   end;
 
   if GlobalWebView2Loader.Initialized then begin

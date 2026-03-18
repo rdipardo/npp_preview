@@ -1,4 +1,4 @@
-inherited frmHTMLPreview: TfrmHTMLPreview
+inherited FrmWebView2Preview: TFrmWebView2Preview
   Left = 0
   Top = 0
   Caption = 'HTML preview'
@@ -324,11 +324,11 @@ inherited frmHTMLPreview: TfrmHTMLPreview
     AllowSingleSignOnUsingOSPrimaryAccount = False
     OnInitializationError = wbIEInitializationError
     OnAfterCreated = wbIEAfterCreated
+    OnNavigationStarting = wbIENavigationStarting
     OnHistoryChanged = wbIENavigationHistoryChange
     OnDocumentTitleChanged = wbIETitleChange
-    OnStatusBarTextChanged = wbIEStatusBar
     OnMoveFocusRequested = wbIEMoveFocusRequested
-    OnNavigationStarting = wbIENavigationStarting
+    OnStatusBarTextChanged = wbIEStatusBar
     OnExecuteScriptWithResultCompleted = wbIEExecuteScriptWithResultCompleted
     Left = 8
     Top = 8
