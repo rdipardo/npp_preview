@@ -75,6 +75,8 @@ type
   private
     { Private declarations }
     FBufferID: TBufferID;
+    FSciDirectPtr: HWND;
+    FSciDirectFunc: TScintillaMessageFnc;
     FScrollPositions: TDictionary<TBufferID,TPoint>;
     FFilterThread: TCustomFilterThread;
     FDefaultStyleSheet, FDefaultScript: wvString;
@@ -84,6 +86,7 @@ type
 
     procedure SaveScrollPos;
     procedure RestoreScrollPos;
+    procedure GetDirectFunction;
     procedure UpdateNavButton(var ABtn: TBitBtn; NewState: Boolean);
 
     function  DetermineCustomFilter: string;
@@ -337,7 +340,6 @@ end {TFrmWebView2Preview.tmrAutorefreshTimer};
 procedure TFrmWebView2Preview.btnRefreshClick(Sender: TObject);
 var
   BufferID: TBufferID;
-  hScintilla: THandle;
   Lexer: NativeInt;
   IsHTML, IsXML, IsCustom: Boolean;
   Size: WPARAM;
@@ -353,13 +355,13 @@ begin
 ODS('FreeAndNil(FFilterThread);');
     FreeAndNil(FFilterThread);
     SaveScrollPos;
+    GetDirectFunction;
     ContentStream.Text := PLACEHOLDER_CONTENT;
     wbIE.ClearBrowsingData(COREWEBVIEW2_BROWSING_DATA_KINDS_BROWSING_HISTORY);
 
     BufferID := SendMessage(Self.Npp.NppData.NppHandle, NPPM_GETCURRENTBUFFERID, 0, 0);
-    hScintilla := Npp.CurrentScintilla;
 
-    Lexer := SendMessage(hScintilla, SCI_GETLEXER, 0, 0);
+    Lexer := FSciDirectFunc(FSciDirectPtr, SCI_GETLEXER, 0, 0);
     IsHTML := (Lexer = SCLEX_HTML);
     IsXML := (Lexer = SCLEX_XML);
 
@@ -372,12 +374,12 @@ ODS('FreeAndNil(FFilterThread);');
       {$MESSAGE HINT 'TODO: Find a way to communicate why there is no preview, depending on the situation — MCO 22-01-2013'}
 
       if IsXML or IsHTML or IsCustom then begin
-        CodePage := SendMessage(hScintilla, SCI_GETCODEPAGE, 0, 0);
-        Size := SendMessage(hScintilla, SCI_GETTEXT, 0, 0);
+        CodePage := FSciDirectFunc(FSciDirectPtr, SCI_GETCODEPAGE, 0, 0);
+        Size := FSciDirectFunc(FSciDirectPtr, SCI_GETTEXT, 0, 0);
         Inc(Size);
         ContentStream.Size := Size;
         ContentStream.CodePage := CodePage;
-        SendMessage(hScintilla, SCI_GETTEXT, Size, LPARAM(ContentStream.Data));
+        FSciDirectFunc(FSciDirectPtr, SCI_GETTEXT, Size, LPARAM(ContentStream.Data));
       end;
 
       HTML := ContentStream.Text;
@@ -450,7 +452,6 @@ var
   Size: WPARAM;
   Filename: nppString;
   HTML: TUniCodeStreamString;
-  hScintilla: THandle;
 begin
   try
     IsHTML := not WideSameText(ContentStream.Text, PLACEHOLDER_CONTENT);
@@ -482,8 +483,11 @@ ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy({$ifdef 
 
       {--- 2013-01-26 Martijn: the WebBrowser control has a tendency to steal the focus. We'll let
                                   the editor take it back. ---}
-      hScintilla := Npp.CurrentScintilla;
-      SendMessage(hScintilla, SCI_GRABFOCUS, 0, 0);
+
+      // A direct function SHOULD NOT be used here because this method may be
+      // called from a different thread (via `TCustomFilterThread.DoSynchronize`);
+      // see https://www.scintilla.org/ScintillaDoc.html#DirectAccess
+      SendMessage(Npp.CurrentScintilla, SCI_GRABFOCUS, 0, 0);
     end else begin
       self.UpdateDisplayInfo('');
     end;
@@ -631,6 +635,23 @@ begin
     ODS('RestoreScrollPos[%x]: --', [FBufferID]);
   end;
 end {TFrmWebView2Preview.RestoreScrollPos};
+
+{ ------------------------------------------------------------------------------------------------ }
+procedure TFrmWebView2Preview.GetDirectFunction;
+var
+  HScintilla: HWND;
+  DirectFuncPtr: NativeInt;
+begin
+  HScintilla := Npp.CurrentScintilla;
+  DirectFuncPtr := SendMessageW(HScintilla, SCI_GETDIRECTFUNCTION, 0, 0);
+  FSciDirectPtr := SendMessageW(HScintilla, SCI_GETDIRECTPOINTER, 0, 0);
+  if (DirectFuncPtr > 0) and (FSciDirectPtr > 0) then begin
+    FSciDirectFunc := TScintillaMessageFnc(DirectFuncPtr);
+  end else begin
+    FSciDirectFunc := TScintillaMessageFnc(@Windows.SendMessageW);
+    FSciDirectPtr := HScintilla;
+  end;
+end {TFrmWebView2Preview.GetDirectFunction};
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TFrmWebView2Preview.ForgetBuffer(const BufferID: TBufferID);
@@ -793,7 +814,6 @@ function TFrmWebView2Preview.ExecuteCustomFilter(const FilterName: string; const
 var
   FilterData: TFilterData;
   DocFile: TFileName;
-  hScintilla: THandle;
   Filters: TUtf8IniFile;
   BufferEncoding: NativeInt;
 begin
@@ -804,7 +824,6 @@ begin
   FilterData.DocFile := DocFile;
   FilterData.Contents := HTML;
 
-  hScintilla := Npp.CurrentScintilla;
   BufferEncoding := SendMessage(Npp.NppData.NppHandle, NPPM_GETBUFFERENCODING, BufferID, 0);
   case BufferEncoding of
     1, 4: FilterData.Encoding := TEncoding.UTF8;
@@ -814,7 +833,7 @@ begin
     else  FilterData.Encoding := TEncoding.ANSI;
   end;
   FilterData.UseBOM := False; // BufferEncoding in [1, 2, 3];
-  FilterData.Modified := SendMessage(hScintilla, SCI_GETMODIFY, 0, 0) <> 0;
+  FilterData.Modified := FSciDirectFunc(FSciDirectPtr, SCI_GETMODIFY, 0, 0) <> 0;
 
   Filters := TNppPluginPreviewHTML(Npp).GetSettings('Filters.ini');
   try

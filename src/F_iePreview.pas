@@ -65,6 +65,8 @@ type
   private
     { Private declarations }
     FBufferID: TBufferID;
+    FSciDirectPtr: HWND;
+    FSciDirectFunc: TScintillaMessageFnc;
     FScrollPositions: TDictionary<TBufferID,TPoint>;
     FFilterThread: TCustomFilterThread;
     FScrollTop: Integer;
@@ -73,6 +75,7 @@ type
 
     procedure SaveScrollPos;
     procedure RestoreScrollPos(const BufferID: TBufferID);
+    procedure GetDirectFunction;
 
     function  DetermineCustomFilter: string;
     function  ExecuteCustomFilter(const FilterName: string; const HTML: WideString; const BufferID: TBufferID): Boolean;
@@ -243,7 +246,6 @@ end {TFrmIEPreview.tmrAutorefreshTimer};
 procedure TFrmIEPreview.btnRefreshClick(Sender: TObject);
 var
   BufferID: TBufferID;
-  hScintilla: THandle;
   Lexer: NativeInt;
   IsHTML, IsXML, IsCustom: Boolean;
   Size: WPARAM;
@@ -259,12 +261,12 @@ begin
 ODS('FreeAndNil(FFilterThread);');
     FreeAndNil(FFilterThread);
     SaveScrollPos;
+    GetDirectFunction;
     ContentStream.Text := PLACEHOLDER_CONTENT;
 
     BufferID := SendMessage(Self.Npp.NppData.NppHandle, NPPM_GETCURRENTBUFFERID, 0, 0);
-    hScintilla := Npp.CurrentScintilla;
 
-    Lexer := SendMessage(hScintilla, SCI_GETLEXER, 0, 0);
+    Lexer := FSciDirectFunc(FSciDirectPtr, SCI_GETLEXER, 0, 0);
     IsHTML := (Lexer = SCLEX_HTML);
     IsXML := (Lexer = SCLEX_XML);
 
@@ -277,12 +279,12 @@ ODS('FreeAndNil(FFilterThread);');
       {$MESSAGE HINT 'TODO: Find a way to communicate why there is no preview, depending on the situation — MCO 22-01-2013'}
 
       if IsXML or IsHTML or IsCustom then begin
-        CodePage := SendMessage(hScintilla, SCI_GETCODEPAGE, 0, 0);
-        Size := SendMessage(hScintilla, SCI_GETTEXT, 0, 0);
+        CodePage := FSciDirectFunc(FSciDirectPtr, SCI_GETCODEPAGE, 0, 0);
+        Size := FSciDirectFunc(FSciDirectPtr, SCI_GETTEXT, 0, 0);
         Inc(Size);
         ContentStream.Size := Size;
         ContentStream.CodePage := CodePage;
-        SendMessage(hScintilla, SCI_GETTEXT, Size, LPARAM(ContentStream.Data));
+        FSciDirectFunc(FSciDirectPtr, SCI_GETTEXT, Size, LPARAM(ContentStream.Data));
       end;
 
       HTML := ContentStream.Text;
@@ -290,6 +292,7 @@ ODS('FreeAndNil(FFilterThread);');
 //MessageBox(Npp.NppData.NppHandle, PChar(Format('FilterName: %s', [FilterName])), 'PreviewHTML', MB_ICONINFORMATION);
         wbIEStatusTextChange(wbIE, WideFormat('Running filter %s...', [FilterName]));
         if ExecuteCustomFilter(FilterName, HTML, BufferID) then begin
+          PrevTimerID := SetTimer(Handle, 0, 800, @PreviewRefreshTimer);
           Exit;
         end else begin
           wbIEStatusTextChange(wbIE, WideFormat('Failed filter %s...', [FilterName]));
@@ -328,7 +331,6 @@ var
   Size: WPARAM;
   Filename: nppString;
   HTML: TUniCodeStreamString;
-  hScintilla: THandle;
 begin
   try
     IsHTML := not WideSameText(ContentStream.Text, PLACEHOLDER_CONTENT);
@@ -362,8 +364,11 @@ ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy({$ifdef 
 
       {--- 2013-01-26 Martijn: the WebBrowser control has a tendency to steal the focus. We'll let
                                   the editor take it back. ---}
-      hScintilla := Npp.CurrentScintilla;
-      SendMessage(hScintilla, SCI_GRABFOCUS, 0, 0);
+
+      // A direct function SHOULD NOT be used here because this method may be
+      // called from a different thread (via `TCustomFilterThread.DoSynchronize`);
+      // see https://www.scintilla.org/ScintillaDoc.html#DirectAccess
+      SendMessage(Npp.CurrentScintilla, SCI_GRABFOCUS, 0, 0);
     end else begin
       self.UpdateDisplayInfo('');
     end;
@@ -436,6 +441,23 @@ begin
 end {TFrmIEPreview.RestoreScrollPos};
 
 { ------------------------------------------------------------------------------------------------ }
+procedure TFrmIEPreview.GetDirectFunction;
+var
+  HScintilla: HWND;
+  DirectFuncPtr: NativeInt;
+begin
+  HScintilla := Npp.CurrentScintilla;
+  DirectFuncPtr := SendMessageW(HScintilla, SCI_GETDIRECTFUNCTION, 0, 0);
+  FSciDirectPtr := SendMessageW(HScintilla, SCI_GETDIRECTPOINTER, 0, 0);
+  if (DirectFuncPtr > 0) and (FSciDirectPtr > 0) then begin
+    FSciDirectFunc := TScintillaMessageFnc(DirectFuncPtr);
+  end else begin
+    FSciDirectFunc := TScintillaMessageFnc(@Windows.SendMessageW);
+    FSciDirectPtr := HScintilla;
+  end;
+end {TFrmIEPreview.GetDirectFunction};
+
+{ ------------------------------------------------------------------------------------------------ }
 procedure TFrmIEPreview.ForgetBuffer(const BufferID: TBufferID);
 begin
   if FBufferID = BufferID then
@@ -448,12 +470,8 @@ end {TFrmIEPreview.ForgetBuffer};
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TFrmIEPreview.ReloadSettings;
-// var
-  // AssetName, ExtFilter: string;
 begin
   with TNppPluginPreviewHTML(Npp).GetSettings() do begin
-    // TODO: refactor 'SaveScrollPos'
-    // FPreserveScrollPosition := ReadBool('Scroll', 'Sticky', True);
     tmrAutorefresh.Interval := ReadInteger('Autorefresh', 'Interval', tmrAutorefresh.Interval);
     Free;
   end;
@@ -555,7 +573,6 @@ function TFrmIEPreview.ExecuteCustomFilter(const FilterName: string; const HTML:
 var
   FilterData: TFilterData;
   DocFile: TFileName;
-  hScintilla: THandle;
   Filters: TUtf8IniFile;
   BufferEncoding: NativeInt;
 begin
@@ -566,7 +583,6 @@ begin
   FilterData.DocFile := DocFile;
   FilterData.Contents := HTML;
 
-  hScintilla := Npp.CurrentScintilla;
   BufferEncoding := SendMessage(Npp.NppData.NppHandle, NPPM_GETBUFFERENCODING, BufferID, 0);
   case BufferEncoding of
     1, 4: FilterData.Encoding := TEncoding.UTF8;
@@ -576,7 +592,7 @@ begin
     else  FilterData.Encoding := TEncoding.ANSI;
   end;
   FilterData.UseBOM := BufferEncoding in [1, 2, 3];
-  FilterData.Modified := SendMessage(hScintilla, SCI_GETMODIFY, 0, 0) <> 0;
+  FilterData.Modified := FSciDirectFunc(FSciDirectPtr, SCI_GETMODIFY, 0, 0) <> 0;
 
   Filters := TNppPluginPreviewHTML(Npp).GetSettings('Filters.ini');
   try
@@ -609,6 +625,7 @@ begin
    PrevTimerID := SetTimer(Handle, 0, tmrAutorefresh.Interval, @PreviewRefreshTimer);
 end;
   FFilterThread := nil;
+  SendMessage(Npp.CurrentScintilla, SCI_GRABFOCUS, 0, 0);
 end {TFrmIEPreview.FilterThreadTerminate};
 
 
