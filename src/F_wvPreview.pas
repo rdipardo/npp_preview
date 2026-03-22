@@ -656,7 +656,7 @@ end {TFrmWebView2Preview.GetDirectFunction};
 { ------------------------------------------------------------------------------------------------ }
 procedure TFrmWebView2Preview.ForgetBuffer(const BufferID: TBufferID);
 begin
-  if FBufferID = BufferID then
+  if (FBufferID = BufferID) or (Npp.GetCurrentBufferPath(BufferID) = '') then
     FBufferID := -1;
   if Assigned(FScrollPositions) then begin
     FScrollPositions.Remove(BufferID);
