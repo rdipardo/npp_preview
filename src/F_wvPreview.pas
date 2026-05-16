@@ -594,6 +594,16 @@ begin
     begin
       FScrollPositions.Remove(FBufferID);
       PrevTimerID := SetTimer(Handle, 0, 100, @PreviewRefreshTimer);
+    end
+    else if (PosEx('#', EventArgs.Uri, Length(wbIe.Source)) <> 0) then
+    begin
+      // Target is an anchor within the same document -- reload user assets, if any
+      if FHasDefaultStyle then
+        wbIE.ExecuteScript(WideFormat(INJECT_USER_STYLE,
+          [WideFormat('https://%s/%s', [ASSET_DOMAIN, ExtractFileName(FDefaultStyleSheet)])]));
+      if FHasDefaultScript then
+        wbIE.ExecuteScript(WideFormat(INJECT_USER_SCRIPT,
+          [WideFormat('https://%s/%s', [ASSET_DOMAIN, ExtractFileName(FDefaultScript)])]));
     end;
   finally
     FreeAndNil(EventArgs);
