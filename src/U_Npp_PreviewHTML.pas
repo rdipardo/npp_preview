@@ -573,6 +573,8 @@ begin
       else if (TryCast<TFrmWebView2Preview>(wvPreviemFrm)) then wvPreviemFrm.ToggleDarkMode;
       if Assigned(AboutForm) then AboutForm.ToggleDarkMode;
     end;
+  end else if (sn^.nmhdr.code = NPPN_SNAPSHOTDIRTYFILELOADED) then begin
+    DoNppnBufferActivated(sn.nmhdr.idFrom);
   end else if (sn^.nmhdr.code = SCN_AUTOCCOMPLETED) then begin
     if (TryCast<TFrmIEPreview>(iePreviemFrm)) and iePreviemFrm.Visible then
       iePreviemFrm.btnRefresh.Click
