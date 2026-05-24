@@ -176,22 +176,27 @@ end;
 { ------------------------------------------------------------------------------------------------ }
 procedure _FuncSetIE8; cdecl;
 begin
-  Npp.CommandSetIEVersion(8000);
+  { Webpages are displayed in IE8 Standards mode, regardless of the declared !DOCTYPE directive.
+    Failing to declare a !DOCTYPE directive causes the page to load in Quirks. }
+  Npp.CommandSetIEVersion(8888);
 end;
 { ------------------------------------------------------------------------------------------------ }
 procedure _FuncSetIE9; cdecl;
 begin
-  Npp.CommandSetIEVersion(9000);
+  { Webpages are displayed in IE9 Standards mode, regardless of the declared !DOCTYPE directive. }
+  Npp.CommandSetIEVersion(9999);
 end;
 { ------------------------------------------------------------------------------------------------ }
 procedure _FuncSetIE10; cdecl;
 begin
-  Npp.CommandSetIEVersion(10000);
+  { Webpages are displayed in IE10 Standards mode, regardless of the !DOCTYPE directive. }
+  Npp.CommandSetIEVersion(10001);
 end;
 { ------------------------------------------------------------------------------------------------ }
 procedure _FuncSetIE11; cdecl;
 begin
-  Npp.CommandSetIEVersion(11000);
+  { Webpages are displayed in IE11 edge mode, regardless of the declared !DOCTYPE directive. }
+  Npp.CommandSetIEVersion(11001);
 end;
 
 

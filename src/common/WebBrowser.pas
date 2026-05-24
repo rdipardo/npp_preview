@@ -145,7 +145,7 @@ begin
   end;
 
   if Result = 0 then
-    Result := 7000; // Default value for applications hosting the WebBrowser Control.
+    Result := 11001; // Default value for applications hosting the WebBrowser Control.
 end {GetBrowserEmulation};
 { ------------------------------------------------------------------------------------------------ }
 procedure SetBrowserEmulation(const Value: Integer);
