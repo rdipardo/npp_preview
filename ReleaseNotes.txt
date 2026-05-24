@@ -1,6 +1,12 @@
 Preview HTML plugin for Notepad++
 =================================
 
+v1.4.4.2, 2026-05-24
+--------------------
+- Fixed: refresh the preview panel when unsaved session files are reloaded by Notepad++
+- Fixed: (WebView2) reload user-defined style sheets when navigating to a link in the same document
+- Changed: (IE) make IE 11 the default emulation target version
+
 v1.4.4.0, 2026-03-26
 --------------------
 - Fixed: resolved an edge case where generated previews would retain styles left over from the placeholder page
