@@ -492,7 +492,8 @@ var
   Names: TStringList;
   i: Integer;
   Match: Boolean;
-  Ext, Language, DocLanguage: string;
+  Ext, Language: string;
+  DocLanguage: widestring;
   DocLangType, LangType: Integer;
   Extensions: TStringList;
   Filespec: string;
@@ -548,9 +549,9 @@ begin
           end else begin
             if DocLanguage = '' then begin
               SetLength(DocLanguage, SendMessage(Npp.NppData.NppHandle, NPPM_GETLANGUAGENAME, WPARAM(DocLangType), LPARAM(nil)));
-              SetLength(DocLanguage, SendMessage(Npp.NppData.NppHandle, NPPM_GETLANGUAGENAME, WPARAM(DocLangType), LPARAM(PChar(DocLanguage))));
+              SetLength(DocLanguage, SendMessage(Npp.NppData.NppHandle, NPPM_GETLANGUAGENAME, WPARAM(DocLangType), LPARAM(PWChar(DocLanguage))));
             end;
-            if SameText(Language, DocLanguage) then begin
+            if SameText(Language, {$ifdef FPC}UTF8Encode{$endif}(DocLanguage)) then begin
               Match := True;
             end;
           end;
