@@ -603,6 +603,11 @@ begin
       if (TryCast<TFrmIEPreview>(iePreviemFrm)) then iePreviemFrm.ToggleDarkMode
       else if (TryCast<TFrmWebView2Preview>(wvPreviemFrm)) then wvPreviemFrm.ToggleDarkMode;
       if Assigned(AboutForm) then AboutForm.ToggleDarkMode;
+    end else
+    if (sn^.nmhdr.code = NPPN_FILEBEFORESAVE) then begin
+      if WideSameText(FSettingsDir+'Settings.ini', GetCurrentBufferPath(sn^.nmhdr.IdFrom)) then
+        MessageBoxW(NppData.nppHandle, PWchar('Restart Notepad++ to apply new settings.'),
+          PWChar(Caption), MB_ICONINFORMATION);
     end;
   end else if (sn^.nmhdr.code = NPPN_SNAPSHOTDIRTYFILELOADED) then begin
     DoNppnBufferActivated(sn.nmhdr.idFrom);
