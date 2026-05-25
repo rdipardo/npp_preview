@@ -340,7 +340,7 @@ end {TFrmWebView2Preview.tmrAutorefreshTimer};
 procedure TFrmWebView2Preview.btnRefreshClick(Sender: TObject);
 var
   BufferID: TBufferID;
-  Lexer: NativeInt;
+  Lexer: TNppLang;
   IsHTML, IsXML, IsCustom: Boolean;
   Size: WPARAM;
   HTML: TUnicodeStreamString;
@@ -361,9 +361,9 @@ ODS('FreeAndNil(FFilterThread);');
 
     BufferID := SendMessage(Self.Npp.NppData.NppHandle, NPPM_GETCURRENTBUFFERID, 0, 0);
 
-    Lexer := FSciDirectFunc(FSciDirectPtr, SCI_GETLEXER, 0, 0);
-    IsHTML := (Lexer = SCLEX_HTML);
-    IsXML := (Lexer = SCLEX_XML);
+    Lexer := TNppPluginPreviewHTML(Npp).FileType;
+    IsHTML := Lexer in [ L_HTML, L_PHP, L_ASP, L_JSP ];
+    IsXML := (Lexer = L_XML);
 
     Screen.Cursor := crHourGlass;
     try

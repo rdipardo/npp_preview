@@ -41,6 +41,7 @@ type
     function Caption: nppString;
     function UserAgentString: nppstring;
     function IsWebView2Installed: Boolean;
+    function DocumentFileType: TNppLang;
     function TryCast<TForm: TNppForm>(out AForm: TForm): Boolean;
     procedure AddFuncSeparator;
     procedure SetMenuItemState(const Id: Integer; Disable: Boolean);
@@ -65,6 +66,7 @@ type
     function  GetAssetPath(const Name: string; const Mime: string = '.css'): WideString;
     function  GetSettings(const Name: WideString = 'Settings.ini'): TUtf8IniFile;
 
+    property FileType: TNppLang read DocumentFileType;
     property UsingMsEdge: Boolean read FCanUseWebView2;
     property ConfigDir: nppString read FSettingsDir;
     property AssetDir: nppString read FStaticAssetsDir;
@@ -244,6 +246,30 @@ begin
     FreeAndNil(RegValues);
   end;
 end {TNppPluginPreviewHTML.IsWebView2Installed};
+
+{ ------------------------------------------------------------------------------------------------ }
+function TNppPluginPreviewHTML.DocumentFileType: TNppLang;
+var
+  LangId: NativeInt;
+  Ext: NppString;
+begin
+  LangId := Ord(L_TEXT);
+  SendNppMessage(NPPM_GETCURRENTLANGTYPE, 0, @LangId);
+  Result := TNppLang(LangId);
+  if not (Result in [ L_HTML, L_XML, L_PHP, L_ASP, L_JSP ]) then
+  begin
+    Ext := GetCurrentFileExt;
+    if WideSameText('.htm', Copy(Ext, 1, 4))
+      or WideSameText('htm', Copy(Ext, 3, 3))
+      or WideSameText('htm', Copy(Ext, 4, 3))
+      or WideSameText('.asp', Copy(Ext, 1, 4))
+      or WideSameText('.php', Copy(Ext, 1, 4))
+      or WideSameText('.jsp', Copy(Ext, 1, 4))
+      or WideSameText('.xht', Ext) or WideSameText('.hta', Ext)
+    then
+      Result := L_HTML;
+    end;
+end;
 
 { ------------------------------------------------------------------------------------------------ }
 function TNppPluginPreviewHTML.Caption: nppString;
