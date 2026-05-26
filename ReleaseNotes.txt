@@ -1,6 +1,11 @@
 Preview HTML plugin for Notepad++
 =================================
 
+v1.4.5.0, 2026-05-26
+--------------------
+- Fixed: resolved a compatibility issue with lexer plugins that may alter the language ID of HTML files ([#9])
+- Fixed: [custom filters] that are mapped to a lexer name are functional again (regressed by the migration to Free Pascal in v1.4.0)
+
 v1.4.4.2, 2026-05-24
 --------------------
 - Fixed: refresh the preview panel when unsaved session files are reloaded by Notepad++
@@ -121,7 +126,9 @@ v1.1.0.0, 2013-01-20
 [#5]: https://github.com/rdipardo/npp_preview/issues/5
 [#6]: https://github.com/rdipardo/npp_preview/issues/6
 [#7]: https://github.com/rdipardo/npp_preview/issues/7
+[#9]: https://github.com/rdipardo/npp_preview/issues/9
 [wiki homepage]: https://github.com/rdipardo/npp_preview/wiki
+[custom filters]: https://github.com/rdipardo/npp_preview/wiki/Filters
 [new option]: https://github.com/rdipardo/npp_preview/wiki/Settings#example-1
 [a017892ab7]: https://fossil.2of4.net/npp_preview/tktview/a017892ab7
 [cfc74baf4b]: https://fossil.2of4.net/npp_preview/tktview/cfc74baf4b
