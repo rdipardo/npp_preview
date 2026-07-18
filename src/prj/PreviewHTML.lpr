@@ -33,6 +33,7 @@ library PreviewHTML;
 uses
   SysUtils,
   Windows,
+  uWVLoader,
   nppplugin in '..\lib\Source\Units\Common\nppplugin.pas',
   U_Npp_PreviewHTML in '..\U_Npp_PreviewHTML.pas';
 
@@ -49,6 +50,8 @@ begin
     try
       if Assigned(Npp) then
         Npp.Free;
+
+      DestroyGlobalWebView2Loader;
     except
       ShowException(ExceptObject, ExceptAddr);
     end;

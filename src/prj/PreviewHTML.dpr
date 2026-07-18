@@ -21,6 +21,7 @@ uses
   Types,
   Windows,
   Messages,
+  uWVLoader,
   nppplugin in '..\lib\Source\Units\Common\nppplugin.pas',
   NppForms in '..\lib\Source\Forms\Common\NppForms.pas' {NppForm},
   NppDockingForms in '..\lib\Source\Forms\Common\NppDockingForms.pas' {NppDockingForm},
@@ -49,6 +50,8 @@ begin
     try
       if Assigned(Npp) then
         Npp.Free;
+
+      DestroyGlobalWebView2Loader;
     except
       ShowException(ExceptObject, ExceptAddr);
     end;
