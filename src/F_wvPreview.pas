@@ -265,6 +265,9 @@ begin
     sbrIE.Canvas.Brush.Color := TColor(Palette.Background);
   end else
     sbrIE.Canvas.Brush.Color := GetRGBColorResolvingParent;
+
+  ReloadSettings;
+  BtnRefresh.Click;
 end;
 
 procedure TFrmWebView2Preview.SubclassAndTheme(DmfMask: Cardinal);
