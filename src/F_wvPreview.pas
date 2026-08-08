@@ -79,6 +79,7 @@ type
     FSciDirectFunc: TScintillaMessageFnc;
     FScrollPositions: TDictionary<TBufferID,TPoint>;
     FFilterThread: TCustomFilterThread;
+    FRemoteAssets: TStringList;
     FDefaultStyleSheet, FDefaultScript: wvString;
     FHasDefaultStyle, FHasDefaultScript: Boolean;
     FEnsureRendered: Boolean;
@@ -167,6 +168,18 @@ const
     '   js.src = "%s";' +
     '   js.defer = true;' +
     '   document.body.insertAdjacentElement("afterend", js);' +
+    ' } catch (_) { }' +
+    '}, 0);';
+  INJECT_3RD_PARTY_SCRIPT = 'window.setTimeout(() => {' +
+    ' try {' +
+    '   let js = document.createElement("script");' +
+    '   js.src = "https://cdn.jsdelivr.net/npm/%s";' +
+    '   js.defer = true;' +
+    '   js.onload = (e) => {' +
+    '       if (/(katex).*\/auto\-render(\.min)?\.js$/i.test(e.target.src))' +
+    '         renderMathInElement(document.body);' +
+    '       };' +
+    '   document.head.insertAdjacentElement("beforeend", js);' +
     ' } catch (_) { }' +
     '}, 0);';
 
@@ -300,6 +313,7 @@ end;
 procedure TFrmWebView2Preview.FormCreate(Sender: TObject);
 begin
   FScrollPositions := TDictionary<TBufferID,TPoint>.Create;
+  FRemoteAssets := TStringList.Create;
   FPreserveScrollPosition := True;
   //self.KeyPreview := true; // special hack for input forms
   self.OnFloat := self.FormFloat;
@@ -320,6 +334,7 @@ end {TFrmWebView2Preview.FormCreate};
 procedure TFrmWebView2Preview.FormDestroy(Sender: TObject);
 begin
   FreeAndNil(FScrollPositions);
+  FreeAndNil(FRemoteAssets);
   FreeAndNil(FFilterThread);
   WbHost.Browser.CoreWebView2Controller.Close;
   inherited;
@@ -453,7 +468,7 @@ var
   IsHTML: Boolean;
   HeadStart: Integer;
   Size: WPARAM;
-  Filename: nppString;
+  Filename, AssetURL: nppString;
   HTML: TUniCodeStreamString;
 begin
   try
@@ -500,6 +515,21 @@ ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy({$ifdef 
     if IsHTML then
     begin
       wbIE.ExecuteScript(SET_DEFAULT_BACKGROUND_JS);
+      if FRemoteAssets.Count > 0 then begin
+        for HeadStart := 0 to FRemoteAssets.Count - 1 do begin
+          AssetURL := {$ifdef FPC}UTF8ToString{$endif}(FRemoteAssets.Strings[HeadStart]);
+          if WideSameText(RightStr(AssetURL, 4), '.css') then
+            wbIE.ExecuteScript(WideFormat(INJECT_USER_STYLE,
+              [WideFormat('https://cdn.jsdelivr.net/npm/%s', [AssetURL])]))
+          else if (Pos('katex', AssetURL) <> 0) then
+            // Ensure KaTeX scripts execute immediately
+            wbIE.ExecuteScript(WideFormat('window.setTimeout(() => { %s }, 800)',
+              [WideFormat({$ifdef FPC}WideStringReplace{$else}StringReplace{$endif}(
+                INJECT_3RD_PARTY_SCRIPT, 'defer = true', 'defer = false', []), [AssetURL])]))
+          else
+            wbIE.ExecuteScript(WideFormat(INJECT_3RD_PARTY_SCRIPT, [AssetURL]));
+        end;
+      end;
       if FHasDefaultStyle then
         wbIE.ExecuteScript(WideFormat(INJECT_USER_STYLE,
           [WideFormat('https://%s/%s', [ASSET_DOMAIN, ExtractFileName(FDefaultStyleSheet)])]));
@@ -680,12 +710,14 @@ end {TFrmWebView2Preview.ForgetBuffer};
 { ------------------------------------------------------------------------------------------------ }
 procedure TFrmWebView2Preview.ReloadSettings;
 var
-  AssetName, ExtFilter: string;
+  I: Integer;
+  AssetName, AssetURL, ExtFilter: string;
 begin
   with TNppPluginPreviewHTML(Npp).GetSettings() do begin
     FPreserveScrollPosition := ReadBool('Scroll', 'Sticky', True);
     tmrAutorefresh.Interval := ReadInteger('Autorefresh', 'Interval', tmrAutorefresh.Interval);
     try
+      { User-defined CSS }
       if ReadBool(SECTION_CSS, 'Disable', False) then
         FDefaultStyleSheet := ''
       else begin
@@ -712,6 +744,7 @@ begin
             FDefaultStyleSheet := '';
         end;
       end;
+      { User-defined JavaScript }
       if not SectionExists(SECTION_JS) or ReadBool(SECTION_JS, 'Disable', False) then
         FDefaultScript := ''
       else begin
@@ -723,12 +756,39 @@ begin
             FDefaultScript := '';
         end;
       end;
+      { 3rd-party libraries }
+      FRemoteAssets.Clear();
+      if ValueExists('MathJax', 'Version') then begin
+        AssetURL := 'mathjax@' + Trim(ReadString('MathJax', 'Version', '4'));
+        with TStringList.Create do begin
+          try
+            CaseSensitive := False;
+            Sorted := False;
+            Delimiter := ',';
+            DelimitedText := Trim(ReadString('MathJax', 'Components', 'tex-svg'));
+            for i := 0 to Count - 1 do
+              FRemoteAssets.Add(Format('%s/%s.min.js', [AssetURL, Strings[i]]));
+          finally
+            Free;
+          end;
+        end;
+      end else if ValueExists('Katex', 'Version') then begin
+        AssetURL := 'katex@' + Trim(ReadString('Katex', 'Version', '0.18'));
+        FRemoteAssets.Add(Format('%s/dist/katex.min.css', [AssetURL]));
+        FRemoteAssets.Add(Format('%s/dist/katex.min.js', [AssetURL]));
+        if ReadBool('Katex', 'AutoRender', True) then
+          FRemoteAssets.Add(Format('%s/dist/contrib/auto-render.min.js', [AssetURL]));
+      end;
+      if ValueExists('jQuery', 'Version') then begin
+        AssetURL := 'jquery@' + Trim(ReadString('jQuery', 'Version', '3'));
+        FRemoteAssets.Add(Format('%s/dist/jquery.min.js', [AssetURL]));
+      end;
     finally
       Free;
     end;
     FHasDefaultStyle := FileExists(FDefaultStyleSheet);
     FHasDefaultScript := FileExists(FDefaultScript);
-    if FHasDefaultScript and (wbIE <> nil) then
+    if ((FRemoteAssets.Count > 0) or FHasDefaultScript) and (wbIE <> nil) then
       wbIE.ScriptEnabled := True;
   end;
 end {TFrmWebView2Preview.ReloadSettings};
