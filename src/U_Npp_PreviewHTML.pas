@@ -53,7 +53,7 @@ type
 
     procedure CommandShowPreviewInIE;
     procedure CommandShowPreviewInWebView2;
-    procedure CommandOpenFile(const Filename: nppString);
+    procedure CommandOpenFile(const Filename: nppString; Open: Boolean = True);
     procedure CommandShowAbout;
 
     procedure BeNotified(sn: PSciNotification); override;
@@ -334,6 +334,10 @@ begin
   self.AddFuncItem('&Preview HTML', _FuncShowPreview, Psk);
 
   FSettingsDir := GetPluginsConfigDir() + '\PreviewHTML\';
+  if not DirectoryExists(FSettingsDir) then
+    CreateDir(FSettingsDir);
+
+  CommandOpenFile('Settings.ini', False);
   with GetSettings() do begin
     IEVersion := ReadString('Emulation', 'Installed IE version', {$ifdef FPC}UTF8Encode{$endif}(GetIEVersion));
     FCanUseWebView2 := not ReadBool('Emulation', 'NoEdge', False);
@@ -387,9 +391,6 @@ begin
   FStaticAssetsDir := FSettingsDir + 'Static';
   UserDataDir := FSettingsDir + 'WebView2Cache';
 
-  if not DirectoryExists(FSettingsDir) then
-    CreateDir(FSettingsDir);
-
   if not DirectoryExists(FStaticAssetsDir) then
     CreateDir(FStaticAssetsDir);
 
@@ -429,7 +430,7 @@ begin
 end {TNppPluginPreviewHTML.SetInfo};
 
 { ------------------------------------------------------------------------------------------------ }
-procedure TNppPluginPreviewHTML.CommandOpenFile(const Filename: nppString);
+procedure TNppPluginPreviewHTML.CommandOpenFile(const Filename: nppString; Open: Boolean);
 var
   HIniFile: THandle;
   FullPath: nppString;
@@ -452,7 +453,7 @@ begin
         end;
       end;
     end;
-    if DoOpen(FullPath) then
+    if Open and DoOpen(FullPath) then
       MessageBoxW(Npp.NppData.NppHandle, PWChar(WideFormat('Unable to open "%s".', [FullPath])), PWChar(Caption), MB_ICONWARNING);
   except
     ShowException(ExceptObject, ExceptAddr);
