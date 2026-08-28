@@ -5,6 +5,14 @@
 <div align="center">
   <img alt="Preview HTML" width="824" src="https://repository-images.githubusercontent.com/808813544/38bd636a-95fa-48d2-9cf5-0398d9b5b592">
 </div>
+<hr>
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/wiki/rdipardo/npp_preview/img/mathjax-demo.png">
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/wiki/rdipardo/npp_preview/img/dark/mathjax-demo.png">
+    <img width="824" alt="MathJax rendering demo" src="https://raw.githubusercontent.com/wiki/rdipardo/npp_preview/img/mathjax-demo.png">
+  </picture>
+</div>
 
 "Preview HTML" is a plug-in for Notepad++ which allows previewing a HTML page inside Notepad++ while editing it.
 

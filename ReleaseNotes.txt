@@ -1,6 +1,13 @@
 Preview HTML plugin for Notepad++
 =================================
 
+v1.4.6.0, 2026-08-28
+--------------------
+- Fixed: (WebView2) the user's default style theme will change with the editor's dark mode setting
+- Fixed: (WebView2) resolved(?) an issue where not all window handles where freed after application shutdown [[#11]]
+- Changed: a template `settings.ini` file is copied to the user's config directory if one doesn't already exist
+- Added: (WebView2) [new configuration options][v1460-feat] for MathJax, KaTeX and jQuery integration [[#8]]
+
 v1.4.5.0, 2026-05-26
 --------------------
 - Fixed: resolved a compatibility issue with lexer plugins that may alter the language ID of HTML files ([#9])
@@ -126,10 +133,13 @@ v1.1.0.0, 2013-01-20
 [#5]: https://github.com/rdipardo/npp_preview/issues/5
 [#6]: https://github.com/rdipardo/npp_preview/issues/6
 [#7]: https://github.com/rdipardo/npp_preview/issues/7
+[#8]: https://github.com/rdipardo/npp_preview/issues/8
 [#9]: https://github.com/rdipardo/npp_preview/issues/9
+[#11]: https://github.com/rdipardo/npp_preview/issues/11
 [wiki homepage]: https://github.com/rdipardo/npp_preview/wiki
 [custom filters]: https://github.com/rdipardo/npp_preview/wiki/Filters
-[new option]: https://github.com/rdipardo/npp_preview/wiki/Settings#example-1
+[v1460-feat]: https://github.com/rdipardo/npp_preview/wiki/Settings#example-1
+[new option]: https://github.com/rdipardo/npp_preview/wiki/Settings#example-2
 [a017892ab7]: https://fossil.2of4.net/npp_preview/tktview/a017892ab7
 [cfc74baf4b]: https://fossil.2of4.net/npp_preview/tktview/cfc74baf4b
 [20d1203257]: https://fossil.2of4.net/npp_preview/tktview/20d1203257
