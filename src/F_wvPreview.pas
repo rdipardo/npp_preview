@@ -157,9 +157,10 @@ const
     ' }' +
     ' try {' +
     '   let style = document.createElement("link");' +
+    '   let node = document.querySelector("base") || document.head.firstElementChild;' +
     '   style.rel = "stylesheet";' +
     '   style.href = "%s";' +
-    '   document.head.insertBefore(style, document.head.firstElementChild);' +
+    '   node.after(style);'+
     ' } catch (_) { }' +
     '}, 0);';
   INJECT_USER_SCRIPT = 'window.setTimeout(() => {' +
@@ -167,7 +168,7 @@ const
     '   let js = document.createElement("script");' +
     '   js.src = "%s";' +
     '   js.defer = true;' +
-    '   document.body.insertAdjacentElement("afterend", js);' +
+    '   document.body.insertAdjacentElement("beforeend", js);' +
     ' } catch (_) { }' +
     '}, 0);';
   INJECT_3RD_PARTY_SCRIPT = 'window.setTimeout(() => {' +
