@@ -522,8 +522,8 @@ ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy({$ifdef 
           if WideSameText(RightStr(AssetURL, 4), '.css') then
             wbIE.ExecuteScript(WideFormat(INJECT_USER_STYLE,
               [WideFormat('https://cdn.jsdelivr.net/npm/%s', [AssetURL])]))
-          else if (Pos('katex', AssetURL) <> 0) then
-            // Ensure KaTeX scripts execute immediately
+          else if (PosEx('auto-render', AssetURL, Pos('katex', AssetURL)) <> 0) then
+            // Ensure KaTeX library has time to load before the auto-render script
             wbIE.ExecuteScript(WideFormat('window.setTimeout(() => { %s }, 800)',
               [WideFormat({$ifdef FPC}WideStringReplace{$else}StringReplace{$endif}(
                 INJECT_3RD_PARTY_SCRIPT, 'defer = true', 'defer = false', []), [AssetURL])]))
