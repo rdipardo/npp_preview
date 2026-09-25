@@ -86,6 +86,7 @@ type
     FEnsureRendered: Boolean;
     FReloadDOM: Boolean;
     FPreserveScrollPosition: Boolean;
+    FRenderMarkdown: Boolean;
     FRenderWireloom: Boolean;
 
     procedure SaveScrollPos;
@@ -349,14 +350,23 @@ end {TFrmWebView2Preview.tmrAutorefreshTimer};
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TFrmWebView2Preview.btnRefreshClick(Sender: TObject);
-  function HasFileExt (ext: nppString; BuffID: TBufferID): Boolean;
+  function HasFileExt (const exts: array of nppString; BuffID: TBufferID): Boolean;
+  var I: Integer;
   begin
-    Result := WideSameText(ext, Npp.GetCurrentFileExt(BuffID));
+    Result := False;
+    for I:=0 to Length(exts) - 1 do
+    begin
+      if WideSameText(exts[i], Npp.GetCurrentFileExt(BuffID)) then
+      begin
+        Result := True;
+        Break;
+      end;
+    end;
   end;
 var
   BufferID: TBufferID;
   Lexer: TNppLang;
-  IsHTML, IsXML, IsCustom, IsWireloom: Boolean;
+  IsHTML, IsXML, IsCustom, IsMarkdown, IsWireloom: Boolean;
   DarkTheme, PreserveDOM: Boolean;
   Size: WPARAM;
   HTML, PlainText: TUnicodeStreamString;
@@ -388,11 +398,13 @@ ODS('FreeAndNil(FFilterThread);');
       {--- MCO 22-01-2013: determine whether the current document matches a custom filter ---}
       FilterName := DetermineCustomFilter;
       IsCustom := Length(FilterName) > 0;
-      IsWireloom := FRenderWireloom and HasFileExt('.wireloom', BufferID);
+      IsWireloom := FRenderWireloom and HasFileExt(['.wireloom'], BufferID);
+      IsMarkdown := (not IsCustom) and FRenderMarkdown and
+        HasFileExt(['.markdown','.md','.mkd','.mkdn','.mdwn','.mdown','.mdoc','.mdtext','.mdtxt'], BufferID);
 
       {$MESSAGE HINT 'TODO: Find a way to communicate why there is no preview, depending on the situation — MCO 22-01-2013'}
 
-      if IsXML or IsHTML or IsCustom or IsWireloom then begin
+      if IsXML or IsHTML or IsCustom or IsMarkdown or IsWireloom then begin
         CodePage := FSciDirectFunc(FSciDirectPtr, SCI_GETCODEPAGE, 0, 0);
         Size := FSciDirectFunc(FSciDirectPtr, SCI_GETTEXT, 0, 0);
         Inc(Size);
@@ -414,16 +426,26 @@ ODS('FreeAndNil(FFilterThread);');
           wbIEStatusTextChange(wbIE, WideFormat('Failed filter %s...', [FilterName]));
           ContentStream.Text := '<pre style="color: darkred">ExecuteCustomFilter returned False</pre>';
         end;
-      end else if IsWireloom then begin
+      end else if IsMarkdown or IsWireloom then begin
         SendMessage(Self.Npp.NppData.NppHandle, NPPM_GETNAMEPART, MAX_PATH, LPARAM(@BufferName[0]));
         PlainText := Copy(HTML, 0, Length(HTML) - Length(TUnicodeStreamString(#$0000)));
-        PreserveDOM := (not FReloadDOM) and FScrollPositions.ContainsKey(BufferID);
+        // TODO: Determine exactly which remote scripts need reloading to work (e.g., MathJax, KaTeX)
+        PreserveDOM := (not FReloadDOM) and (FRemoteAssets.Count = 0) and FScrollPositions.ContainsKey(BufferID);
         DarkTheme := Npp.IsDarkModeEnabled;
         if not PreserveDOM then begin
-          ContentStream.Text := Renderwireloom(PlainText, BufferName, DarkTheme);
+          if IsWireloom then
+            ContentStream.Text := Renderwireloom(PlainText, BufferName, DarkTheme)
+          else if IsMarkdown then
+            ContentStream.Text := RenderMarkdown(PlainText, BufferName, DarkTheme);
           FReloadDOM := False;
-        end else
-          wbIE.ExecuteScript(PrepareWLScript(PlainText, DarkTheme));
+        end else begin
+          if IsWireloom then
+            wbIE.ExecuteScript(PrepareWLScript(PlainText, DarkTheme))
+          else if IsMarkdown then begin
+            wbIE.ExecuteScript(PrepareMDScript(PlainText));
+            wbIE.ExecuteScript(PrepareCodeBlockScript(WL_CODE_BLOCK_CLASS, GetThemeName(DarkTheme)));
+          end;
+        end;
       end else if IsXML then begin
         ContentStream.Text := TransformXMLToHTML(HTML);
       end;
@@ -503,7 +525,7 @@ ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy({$ifdef 
         if FHasDefaultStyle or FHasDefaultScript then
           wbIE.SetVirtualHostNameToFolderMapping(ASSET_DOMAIN,
             TNppPluginPreviewHTML(Npp).AssetDir, COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW);
-        if FRenderWireloom then
+        if FRenderMarkdown or FRenderWireloom then
           wbIE.SetVirtualHostNameToFolderMapping(EXT_DOMAIN,
             TNppPluginPreviewHTML(Npp).ExtAssetDir, COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW);
         ContentStream.Text := HTML;
@@ -733,6 +755,7 @@ var
   AssetName, AssetURL, ExtFilter: string;
 begin
   with TNppPluginPreviewHTML(Npp).GetSettings() do begin
+    FRenderMarkdown := ReadBool('Extensions', 'Markdown', True);
     FRenderWireloom := ReadBool('Extensions', 'Wireloom', True);
     FPreserveScrollPosition := ReadBool('Scroll', 'Sticky', True);
     tmrAutorefresh.Interval := ReadInteger('Autorefresh', 'Interval', tmrAutorefresh.Interval);

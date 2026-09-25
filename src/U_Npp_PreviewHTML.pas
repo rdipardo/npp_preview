@@ -94,6 +94,7 @@ uses
   Graphics,
 {$ifndef FPC}
   Imaging.pngimage,
+  System.IOUtils,
 {$endif}
   WebBrowser,
   uWVLoader,
@@ -320,6 +321,107 @@ begin
     AForm := nil;
 end;
 
+{$ifndef fpc}
+function ConcatPaths(Paths: array of string): string;
+var I: LongInt;
+begin
+  Result := String.Empty;
+  for I:=0 to Length(Paths) - 1 do
+    Result := TPath.Combine(Result, Paths[i]);
+end;
+{$endif}
+
+{ ------------------------------------------------------------------------------------------------ }
+procedure CopyFileTree(DestPath, SrcPath: WideString; Mask: string);
+{$ifndef fpc}
+var
+  FileNames: TArray<string>;
+  FileName, OutDir, OutPath: string;
+  I: LongInt;
+begin
+  with TStringList.Create do
+  begin
+    try
+      CaseSensitive := False;
+      Delimiter := ';';
+      DelimitedText := Mask;
+      for I:=0 to Count - 1 do
+      begin
+        FileNames := TDirectory.GetFiles(SrcPath, Strings[i], TSearchOption.soAllDirectories);
+        for FileName in FileNames do
+        begin
+          OutDir := ExtractFileName(ExtractFileDir(FileName));
+          if not SameText(OutDir, ExtractFileName(DestPath)) then
+          begin
+            ForceDirectories(TPath.Combine(DestPath, OutDir));
+            OutPath := ConcatPaths([DestPath, OutDir, ExtractFileName(FileName)]);
+          end else
+            OutPath := TPath.Combine(DestPath, ExtractFileName(FileName));
+          CopyFileW(PWChar(FileName), PWChar(OutPath), True);
+        end;
+      end;
+    finally
+      Free;
+    end;
+  end;
+{$else}
+  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+  procedure ProcessDir(SearchDir: WideString; Glob: string);
+  var
+    SR: TUnicodeSearchRec;
+    OutDir: WideString;
+  begin
+    if FindFirst(ConcatPaths([SearchDir, UTF8ToString(Glob)]), faAnyFile, SR) = 0 then
+    begin
+      try
+        repeat
+          if (SR.Attr and faDirectory) = 0 then
+          begin
+            OutDir := ConcatPaths([DestPath, ExtractFileName(SearchDir)]);
+            ForceDirectories(OutDir);
+            CopyFileW(PWChar(ConcatPaths([SearchDir, SR.Name])),
+              PWChar(ConcatPaths([OutDir, SR.Name])), True);
+          end;
+        until FindNext(SR) <> 0;
+      finally
+        SysUtils.FindClose(SR);
+      end;
+    end;
+  end;
+  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
+var
+  SR: TUnicodeSearchRec;
+  I: Integer;
+begin
+  with TStringList.Create do begin
+    try
+      CaseSensitive := False;
+      Delimiter := ';';
+      DelimitedText := Mask;
+      if FindFirst(ConcatPaths([SrcPath, '*']), faAnyFile, SR) = 0 then
+      begin
+        try
+          repeat
+            if ((SR.Attr and faDirectory) <> 0) and (Pos('.', SR.Name) = 0) then
+            begin
+              for I:=0 to Count - 1 do
+                ProcessDir(ConcatPaths([SrcPath, SR.Name]), Strings[i]);
+            end else
+              if IndexOf('*'+UTF8Encode(ExtractFileExt(SR.Name))) > -1 then
+                CopyFileW(PWChar(ConcatPaths([SrcPath, SR.Name])),
+                  PWChar(ConcatPaths([DestPath, SR.Name])), True);
+          until FindNext(SR) <> 0;
+        finally
+          SysUtils.FindClose(SR);
+        end;
+      end;
+    finally
+      Free;
+    end;
+  end;
+{$endif}
+end;
+
 { ------------------------------------------------------------------------------------------------ }
 procedure TNppPluginPreviewHTML.SetInfo(NppData: TNppData);
 var
@@ -413,10 +515,19 @@ begin
     CopyFileW(PWChar(ChangeFilePath(DEFAULT_DARK_STYLE_SHEET, TModulePath.DLL)),
       PWChar(DefaultDarkStyleSheet), True);
 
+  if not FileExists(FExtAssetsDir + 'highlightjs\index.js') then begin
+    CreateDir(FExtAssetsDir + 'highlightjs');
+    CopyFileTree(FExtAssetsDir + 'highlightjs', ConcatPaths([TModulePath.DLL,'ext','highlightjs']),'*.css;*.js;*.txt');
+  end;
+
+  if not FileExists(FExtAssetsDir+'marked\index.js') then begin
+    CreateDir(FExtAssetsDir + 'marked');
+    CopyFileTree(FExtAssetsDir + 'marked', ConcatPaths([TModulePath.DLL,'ext','marked']),'*.js;*.txt');
+  end;
+
   if not FileExists(FExtAssetsDir + 'wireloom\index.js') then begin
     CreateDir(FExtAssetsDir + 'wireloom');
-    CopyFileW(PWChar(IncludeTrailingPathDelimiter(TModulePath.DLL) + 'ext\wireloom\index.js'),
-      PWChar(FExtAssetsDir + 'wireloom\index.js'), True);
+    CopyFileTree(FExtAssetsDir + 'wireloom', ConcatPaths([TModulePath.DLL,'ext','wireloom']),'*.js;*.txt');
   end;
 
   if not FCanUseWebView2 then

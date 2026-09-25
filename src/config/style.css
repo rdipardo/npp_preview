@@ -228,6 +228,7 @@ div.tip,
 div.important,
 div.warning,
 div.caution,
+.markdown-alert,
 blockquote {
   border-left: 4px solid #dddddd;
   padding: 0 15px;
@@ -238,6 +239,7 @@ div.tip,
 div.important,
 div.warning,
 div.caution,
+.markdown-alert,
 blockquote > :first-child {
   margin-top: 0;
 }
@@ -247,48 +249,90 @@ div.tip,
 div.important,
 div.warning,
 div.caution,
+.markdown-alert,
 blockquote > :last-child {
   margin-bottom: 0;
 }
 
+.markdown-alert>p.markdown-alert-title {
+  align-items: center;
+  display: flex;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.markdown-alert>p.markdown-alert-title>svg {
+  margin-right: 0.35rem !important;
+}
+
+.markdown-alert-note,
 div.note {
   border-left-color: #0969da;
 }
 
+.markdown-alert.markdown-alert-note .markdown-alert-title,
 div.note>div.title>p {
   color: #0969da;
 }
 
+.markdown-alert-note>p.markdown-alert-title>svg {
+  fill: #0969da;
+}
+
+.markdown-alert-tip,
 div.tip {
   border-left-color: #1a7f37;
 }
 
+.markdown-alert.markdown-alert-tip .markdown-alert-title,
 div.tip>div.title>p {
   color: #1a7f37;
 }
 
+.markdown-alert-tip>p.markdown-alert-title>svg {
+  fill: #1a7f37;
+}
+
+.markdown-alert-important,
 div.important {
   border-left-color: #8250df;
 }
 
+.markdown-alert.markdown-alert-important .markdown-alert-title,
 div.important>div.title>p {
   color: #8250df;
 }
 
+.markdown-alert-important>p.markdown-alert-title>svg {
+  fill: #8250df;
+}
+
+.markdown-alert-warning,
 div.warning {
   border-left-color: #9a6700;
 }
 
+.markdown-alert.markdown-alert-warning .markdown-alert-title,
 div.warning>div.title>p {
   color: #9a6700;
 }
 
+.markdown-alert-warning>p.markdown-alert-title>svg {
+  fill: #9a6700;
+}
+
+.markdown-alert-caution,
 div.caution {
   border-left-color: #cf222e;
 }
 
+.markdown-alert.markdown-alert-caution .markdown-alert-title,
 div.caution>div.title>p {
   color: #d1242f;
+}
+
+.markdown-alert-caution>p.markdown-alert-title>svg {
+  fill: #d1242f;
 }
 
 table {
