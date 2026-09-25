@@ -36,7 +36,7 @@ type
   TNppPluginPreviewHTML = class(TNppPlugin)
   private
     FPreviewForm: TNppForm;
-    FSettingsDir, FStaticAssetsDir: nppString;
+    FSettingsDir, FStaticAssetsDir, FExtAssetsDir: nppString;
     FCanUseWebView2: Boolean;
     function Caption: nppString;
     function UserAgentString: nppstring;
@@ -70,6 +70,7 @@ type
     property UsingMsEdge: Boolean read FCanUseWebView2;
     property ConfigDir: nppString read FSettingsDir;
     property AssetDir: nppString read FStaticAssetsDir;
+    property ExtAssetDir: nppString read FExtAssetsDir;
   end {TNppPluginPreviewHTML};
 
 procedure _FuncShowPreview; cdecl;
@@ -389,10 +390,14 @@ begin
   self.AddFuncItem('&About', _FuncShowAbout);
 
   FStaticAssetsDir := FSettingsDir + 'Static';
+  FExtAssetsDir := FStaticAssetsDir + '\ext\';
   UserDataDir := FSettingsDir + 'WebView2Cache';
 
   if not DirectoryExists(FStaticAssetsDir) then
     CreateDir(FStaticAssetsDir);
+
+  if not DirectoryExists(FExtAssetsDir) then
+    CreateDir(FExtAssetsDir);
 
   if not DirectoryExists(UserDataDir) then
     CreateDir(UserDataDir);
@@ -407,6 +412,12 @@ begin
   if not FileExists(DefaultDarkStyleSheet) then
     CopyFileW(PWChar(ChangeFilePath(DEFAULT_DARK_STYLE_SHEET, TModulePath.DLL)),
       PWChar(DefaultDarkStyleSheet), True);
+
+  if not FileExists(FExtAssetsDir + 'wireloom\index.js') then begin
+    CreateDir(FExtAssetsDir + 'wireloom');
+    CopyFileW(PWChar(IncludeTrailingPathDelimiter(TModulePath.DLL) + 'ext\wireloom\index.js'),
+      PWChar(FExtAssetsDir + 'wireloom\index.js'), True);
+  end;
 
   if not FCanUseWebView2 then
     Exit;
@@ -690,6 +701,7 @@ begin
     frmIEPreview.btnRefresh.Click;
   end else if Assigned(frmWV2Preview) and frmWV2Preview.Visible then begin
     frmWV2Preview.ReloadSettings;
+    frmWV2Preview.ReloadDOM := True;
     frmWV2Preview.btnRefresh.Click;
   end;
   if not FCanUseWebView2 then

@@ -29,6 +29,7 @@ uses
   uWVCoreWebView2Args,
   uWVCoreWebView2ExecuteScriptResult,
   customstreams,
+  extensions,
   U_CustomFilter;
 
 type
@@ -83,7 +84,9 @@ type
     FDefaultStyleSheet, FDefaultScript: wvString;
     FHasDefaultStyle, FHasDefaultScript: Boolean;
     FEnsureRendered: Boolean;
+    FReloadDOM: Boolean;
     FPreserveScrollPosition: Boolean;
+    FRenderWireloom: Boolean;
 
     procedure SaveScrollPos;
     procedure RestoreScrollPos;
@@ -105,6 +108,7 @@ type
     procedure ForgetBuffer(const BufferID: TBufferID);
     procedure DisplayPreview(const BufferID: TBufferID);
     function  UpdatePreview(const BufferID: TBufferID): Boolean;
+    property  ReloadDOM: Boolean write FReloadDOM;
 {$ifdef FPC}
     procedure SubclassAndTheme(DmfMask: Cardinal); override;
     procedure HandleCloseQuery({%H-}Sender: TObject; {%H-}var CanClose: Boolean); override;
@@ -126,10 +130,7 @@ uses
   ShellAPI,
   Debug,
 {$ifndef FPC}
-  REST.Json,
   F_About,
-{$else}
-  fpjson,
 {$endif}
   U_Npp_PreviewHTML;
 
@@ -183,16 +184,6 @@ const
     '   document.head.insertAdjacentElement("beforeend", js);' +
     ' } catch (_) { }' +
     '}, 0);';
-
-function JsonEncode(const AString: wvstring): wvstring;
-begin
-  Result :=
-{$ifdef FPC}
-    UTF8ToString(StringToJSONString(UTF8Encode(AString)))
-{$else}
-    TJson.JsonEncode(AString)
-{$endif};
-end;
 
 procedure PreviewRefreshTimer(WndHandle: HWND; Msg: UINT; EventID: UINT; TimeMS: UINT); stdcall;
 begin
@@ -281,6 +272,7 @@ begin
     sbrIE.Canvas.Brush.Color := GetRGBColorResolvingParent;
 
   ReloadSettings;
+  FReloadDOM := True;
   BtnRefresh.Click;
 end;
 
@@ -357,13 +349,19 @@ end {TFrmWebView2Preview.tmrAutorefreshTimer};
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TFrmWebView2Preview.btnRefreshClick(Sender: TObject);
+  function HasFileExt (ext: nppString; BuffID: TBufferID): Boolean;
+  begin
+    Result := WideSameText(ext, Npp.GetCurrentFileExt(BuffID));
+  end;
 var
   BufferID: TBufferID;
   Lexer: TNppLang;
-  IsHTML, IsXML, IsCustom: Boolean;
+  IsHTML, IsXML, IsCustom, IsWireloom: Boolean;
+  DarkTheme, PreserveDOM: Boolean;
   Size: WPARAM;
-  HTML: TUnicodeStreamString;
+  HTML, PlainText: TUnicodeStreamString;
   FilterName: string;
+  BufferName: array[0..MAX_PATH] of nppChar;
   CodePage: NativeInt;
 begin
   if chkFreeze.Checked then
@@ -371,6 +369,7 @@ begin
 
   try
     tmrAutorefresh.Enabled := False;
+    PreserveDOM := False;
 ODS('FreeAndNil(FFilterThread);');
     FreeAndNil(FFilterThread);
     SaveScrollPos;
@@ -389,10 +388,11 @@ ODS('FreeAndNil(FFilterThread);');
       {--- MCO 22-01-2013: determine whether the current document matches a custom filter ---}
       FilterName := DetermineCustomFilter;
       IsCustom := Length(FilterName) > 0;
+      IsWireloom := FRenderWireloom and HasFileExt('.wireloom', BufferID);
 
       {$MESSAGE HINT 'TODO: Find a way to communicate why there is no preview, depending on the situation — MCO 22-01-2013'}
 
-      if IsXML or IsHTML or IsCustom then begin
+      if IsXML or IsHTML or IsCustom or IsWireloom then begin
         CodePage := FSciDirectFunc(FSciDirectPtr, SCI_GETCODEPAGE, 0, 0);
         Size := FSciDirectFunc(FSciDirectPtr, SCI_GETTEXT, 0, 0);
         Inc(Size);
@@ -414,11 +414,22 @@ ODS('FreeAndNil(FFilterThread);');
           wbIEStatusTextChange(wbIE, WideFormat('Failed filter %s...', [FilterName]));
           ContentStream.Text := '<pre style="color: darkred">ExecuteCustomFilter returned False</pre>';
         end;
+      end else if IsWireloom then begin
+        SendMessage(Self.Npp.NppData.NppHandle, NPPM_GETNAMEPART, MAX_PATH, LPARAM(@BufferName[0]));
+        PlainText := Copy(HTML, 0, Length(HTML) - Length(TUnicodeStreamString(#$0000)));
+        PreserveDOM := (not FReloadDOM) and FScrollPositions.ContainsKey(BufferID);
+        DarkTheme := Npp.IsDarkModeEnabled;
+        if not PreserveDOM then begin
+          ContentStream.Text := Renderwireloom(PlainText, BufferName, DarkTheme);
+          FReloadDOM := False;
+        end else
+          wbIE.ExecuteScript(PrepareWLScript(PlainText, DarkTheme));
       end else if IsXML then begin
         ContentStream.Text := TransformXMLToHTML(HTML);
       end;
 
-      DisplayPreview(BufferID);
+      if not PreserveDOM then
+        DisplayPreview(BufferID);
     finally
       Screen.Cursor := crDefault;
     end;
@@ -492,6 +503,9 @@ ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy({$ifdef 
         if FHasDefaultStyle or FHasDefaultScript then
           wbIE.SetVirtualHostNameToFolderMapping(ASSET_DOMAIN,
             TNppPluginPreviewHTML(Npp).AssetDir, COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW);
+        if FRenderWireloom then
+          wbIE.SetVirtualHostNameToFolderMapping(EXT_DOMAIN,
+            TNppPluginPreviewHTML(Npp).ExtAssetDir, COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW);
         ContentStream.Text := HTML;
       end;
 
@@ -626,6 +640,7 @@ begin
     if (EventArgs.NavigationKind = COREWEBVIEW2_NAVIGATION_KIND_BACK_OR_FORWARD) and
       WideSameText('data:text/html', Copy(EventArgs.Uri, 0, 14)) then
     begin
+      FReloadDOM := True;
       FScrollPositions.Remove(FBufferID);
       PrevTimerID := SetTimer(Handle, 0, 100, @PreviewRefreshTimer);
     end
@@ -718,6 +733,7 @@ var
   AssetName, AssetURL, ExtFilter: string;
 begin
   with TNppPluginPreviewHTML(Npp).GetSettings() do begin
+    FRenderWireloom := ReadBool('Extensions', 'Wireloom', True);
     FPreserveScrollPosition := ReadBool('Scroll', 'Sticky', True);
     tmrAutorefresh.Interval := ReadInteger('Autorefresh', 'Interval', tmrAutorefresh.Interval);
     try
@@ -1011,6 +1027,7 @@ begin
   if wbIE.IsSuspended then
     wbIE.Resume;
   FEnsureRendered := True;
+  FReloadDOM := True;
   ResetTimer;
 end;
 

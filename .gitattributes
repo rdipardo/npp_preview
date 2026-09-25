@@ -7,3 +7,4 @@ src/WebView4Delphi -diff -text
 *.bmp     -diff -text
 *.ico     -diff -text
 *.png     -diff -text
+src/config/ext/** eol=lf linguist-vendored
