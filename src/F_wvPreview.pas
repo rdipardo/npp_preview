@@ -144,12 +144,20 @@ const
     ' </body>' +
     '</html>';
   SET_DEFAULT_BACKGROUND_JS = 'window.setTimeout(() => {' +
+    'const setBackground = () => {' +
     ' const bgc = getComputedStyle(document.body).getPropertyValue("background-color") || "";' +
     ' const clr = getComputedStyle(document.body).getPropertyValue("color") || "";' +
     ' /* black text on a black background? */' +
     ' if (!([bgc, clr].every(s => /rgba?\((0(, )?){3,}/.test(s))))' +
     '   return;' +
     ' document.body.style.setProperty("background-color", "#fff");' +
+    ' };' +
+    ' try {' +
+    '   setBackground();' +
+    ' } catch (e) {' +
+    '   if (e.name === "TypeError")' +
+    '     window.setTimeout(setBackground, 200);' +
+    ' }' +
     '}, 120);';
   INJECT_USER_STYLE = 'window.setTimeout(() => {' +
     ' if (Array.prototype.slice.call(document.styleSheets).length > 0) {' +
