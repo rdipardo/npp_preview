@@ -29,8 +29,8 @@ const
   VAL_FNAME   = 'Filename';
   VAL_EXT     = 'Extension';
   VAL_EXT_ANY = '*';
-  DEFAULT_STYLE_SHEET      = 'style.css';
-  DEFAULT_DARK_STYLE_SHEET = 'style-dark.css';
+  DEFAULT_STYLE_SHEET      = 'style-v202609.css';
+  DEFAULT_DARK_STYLE_SHEET = 'style-dark-v202609.css';
 
 type
   TNppPluginPreviewHTML = class(TNppPlugin)
