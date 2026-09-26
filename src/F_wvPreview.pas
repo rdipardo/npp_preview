@@ -16,7 +16,7 @@ uses
   LCLIntf,
   LCLType,
 {$endif}
-  Windows, Messages, SysUtils, Classes, Variants, Graphics, Controls, Forms, Generics.Collections,
+  Windows, Messages, SysUtils, Classes, Graphics, Controls, Forms, Generics.Collections,
   Dialogs, StdCtrls, ComCtrls, ExtCtrls, Buttons, Utf8IniFiles,
   NppPlugin, NppDockingForms,
   uWVWinControl,
@@ -96,7 +96,6 @@ type
 
     function  DetermineCustomFilter: string;
     function  ExecuteCustomFilter(const FilterName: string; const HTML: wvstring; const BufferID: TBufferID): Boolean;
-    function  TransformXMLToHTML(const XML: WideString): WideString;
 
     procedure FilterThreadTerminate(Sender: TObject);
   public
@@ -125,9 +124,8 @@ var
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 implementation
 uses
-  ComObj, StrUtils, Masks,
+  StrUtils, Masks,
   RegExpr,
-  Registry,
   ShellAPI,
   Debug,
 {$ifndef FPC}
@@ -446,8 +444,6 @@ ODS('FreeAndNil(FFilterThread);');
             wbIE.ExecuteScript(PrepareCodeBlockScript(WL_CODE_BLOCK_CLASS, GetThemeName(DarkTheme)));
           end;
         end;
-      end else if IsXML then begin
-        ContentStream.Text := TransformXMLToHTML(HTML);
       end;
 
       if not PreserveDOM then
@@ -1053,108 +1049,6 @@ begin
   FReloadDOM := True;
   ResetTimer;
 end;
-
-{ ------------------------------------------------------------------------------------------------ }
-function TFrmWebView2Preview.TransformXMLToHTML(const XML: WideString): WideString;
-  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
-  function CreateDOMDocument: OleVariant;
-  var
-    RegKey: TRegistry;
-    RegValues: TStringList;
-    I: Integer;
-    nVersion: Integer;
-  begin
-    VarClear(Result);
-    RegValues := TStringList.Create;
-    RegKey := TRegistry.Create;
-    try
-      RegKey.RootKey := HKEY_CLASSES_ROOT;
-      if RegKey.OpenKeyReadOnly('CLSID\{2933BF90-7B36-11D2-B20E-00C04F983E60}\VersionList') then
-        RegKey.GetValueNames(RegValues);
-      if RegValues.Count <> 0 then begin
-        for i := RegValues.Count - 1 downto 0 do
-        begin
-          Result := CreateOleObject(Format('MSXML2.DOMDocument.%s', [RegValues[i]]));
-          if not VarIsClear(Result) and TryStrToInt(Copy(RegValues[i], 1, 1), nVersion) then
-            Break;
-        end;
-      end;
-      try
-        if not VarIsClear(Result) then begin
-          if nVersion >= 4 then begin
-            Result.setProperty('NewParser', True);
-          end;
-          if nVersion >= 6 then begin
-            Result.setProperty('AllowDocumentFunction', True);
-            Result.setProperty('AllowXsltScript', True);
-            Result.setProperty('ResolveExternals', True);
-            Result.setProperty('UseInlineSchema', True);
-            Result.setProperty('ValidateOnParse', False);
-          end;
-        end;
-      except
-        VarClear(Result);
-      end;
-    finally
-      RegKey.Free;
-      RegValues.Free;
-    end;
-  end {CreateDOMDocument};
-  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
-var
-  bMethodHTML: Boolean;
-  xDoc, xPI, xStylesheet, xOutput: OleVariant;
-  rexHref: TRegExpr;
-begin
-  Result := PLACEHOLDER_CONTENT;
-  try
-    try
-      {--- MCO 30-05-2012: Check to see if there's an xml-stylesheet to convert the XML to HTML. ---}
-      xDoc := CreateDOMDocument;
-      if VarIsClear(xDoc) then Exit;
-      if not xDoc.LoadXML(XML) then Exit;
-
-      xPI := xDoc.selectSingleNode('//processing-instruction("xml-stylesheet")');
-      if VarIsClear(xPI) then Exit;
-
-      rexHref := TRegExpr.Create;
-      try
-        rexHref.ModifierI := False;
-        rexHref.Expression := '(^|\s+)href=["'']([^"'']*?)["'']';
-        if not rexHref.Exec(xPI.nodeValue) then Exit;
-
-        xStylesheet := CreateDOMDocument;
-        if not xStylesheet.Load(rexHref.Match[2]) then Exit;
-      finally
-        rexHref.Free;
-      end;
-
-      bMethodHTML := SameText(xDoc.documentElement.nodeName, 'html');
-      if not bMethodHTML then begin
-        xStylesheet.setProperty('SelectionNamespaces', 'xmlns:xsl="http://www.w3.org/1999/XSL/Transform"');
-        xOutput := xStylesheet.selectSingleNode('/*/xsl:output');
-        if VarIsClear(xOutput) then
-          Exit;
-
-        bMethodHTML := SameStr(VarToStrDef(xOutput.getAttribute('method'), 'xml'), 'html');
-      end;
-      if not bMethodHTML then Exit;
-
-      Result := xDoc.transformNode(xStylesheet.documentElement);
-    except
-      on E: Exception do begin
-        {--- MCO 30-05-2012: Ignore any errors; we weren't able to perform the transformation ---}
-        Result := WideFormat('<html><title>Error transforming XML to HTML</title><body><pre style="color: red">%s</pre></body></html>',
-          [StringReplace(E.Message, '<', '&lt;', [rfReplaceAll])]);
-      end;
-    end;
-  finally
-    VarClear(xOutput);
-    VarClear(xStylesheet);
-    VarClear(xPI);
-    VarClear(xDoc);
-  end;
-end {TFrmWebView2Preview.TransformXMLToHTML};
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TFrmWebView2Preview.UpdateNavButton(var ABtn: TBitBtn; NewState: Boolean);
