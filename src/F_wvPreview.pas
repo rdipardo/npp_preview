@@ -672,9 +672,13 @@ begin
     end
     else if (PosEx('#', EventArgs.Uri, Length(wbIe.Source)) <> 0) then
     begin
-      EventArgs.Cancel := True;
-      wbie.ExecuteScript(WideFormat('window.location.hash = "%s";',
-        [wvString(StrRScan(@EventArgs.Uri[1], #$0023))]));
+      if (Pos('https://'+APP_DOMAIN, EventArgs.Uri) <> 0) and
+        not (TNppPluginPreviewHTML(Npp).FileType in [L_HTML, L_PHP, L_ASP, L_JSP, L_XML]) then
+      begin
+        EventArgs.Cancel := True;
+        wbie.ExecuteScript(WideFormat('window.location.hash = "%s";',
+          [wvString(StrRScan(@EventArgs.Uri[1], #$0023))]));
+      end;
       // Target is an anchor within the same document -- reload user assets, if any
       if FHasDefaultStyle then
         wbIE.ExecuteScript(WideFormat(INJECT_USER_STYLE,
