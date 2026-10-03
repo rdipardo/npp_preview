@@ -92,8 +92,11 @@ const
     '       console.error(err);' +
     '    });' +
     '   </script>' +
-    '   <script type="module" defer>' +
+    '   <script type="module">' +
+    '    import("https://%s/wireloom/index.js").then((wireloom) => {' +
+    '     window.wireloom = wireloom;' +
     '     /* render wireloom code blocks */ %s'+
+    '    }).catch(e => console.error(e));' +
     '   </script>' +
     ' </body>' +
     '</html>';
@@ -194,7 +197,6 @@ function PrepareCodeBlockScript(const ClassName, Theme: TUnicodeStreamString):
   TUnicodeStreamString;
 const
   JS =
-    'import("https://%s/wireloom/index.js").then(async (wireloom) => {' +
     '  try {' +
     '     Array.prototype.slice.call(document.querySelectorAll("%s")).reduce(async (n,c) => {' +
     '       const index = (typeof(n) === "number" ? n : await n);' +
@@ -203,15 +205,10 @@ const
     '       return n+1;' +
     '     }, 1);' +
     '  } catch (e) {' +
-    '    document.getElementById("content").innerHTML = `<p><kbd>${e}</kbd></p>`;' +
     '    console.error(e);' +
-    '  }' +
-    ' }).catch(e => {' +
-    '   document.getElementById("content").innerHTML = `<p><kbd>${e}</kbd></p>`;' +
-    '   console.error(e);' +
-    '});';
+    '  }';
 begin
-  Result := WideFormat(JS, [EXT_DOMAIN, ClassName, Theme]);
+  Result := WideFormat(JS, [ClassName, Theme]);
 end;
 
 function GetThemeName(PrefersDark: Boolean): TUnicodeStreamString;
