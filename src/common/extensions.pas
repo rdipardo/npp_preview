@@ -17,14 +17,22 @@ uses
 
 const
   EXT_DOMAIN = 'preview.extensions';
-  WL_CODE_BLOCK_CLASS = 'code.language-wireloom';
+  WIRELOOM_SELECTOR = 'code.language-wireloom';
+  MERMAID_SELECTOR = 'code.language-mermaid';
+  MERMAID_JS =
+    'mermaid.run({' +
+    ' querySelector: "' + MERMAID_SELECTOR + '",' +
+    ' suppressErrors: true' +
+    '})' +
+    '.then(() => true)' +
+    '.catch(e => console.info(`mermaid: ${e}`));';
 
-function RenderMarkdown(Markup, Title: TUnicodeStreamString; DarkTheme: Boolean): TUnicodeStreamString;
+function RenderMarkdown(Markup, Title: TUnicodeStreamString; DarkTheme, Mermaid: Boolean):
+  TUnicodeStreamString;
 function RenderWireloom(Markup, Title: TUnicodeStreamString; DarkTheme: Boolean): TUnicodeStreamString;
 function PrepareMDScript(Markup: TUnicodeStreamString): TUnicodeStreamString;
 function PrepareWLScript(Markup: TUnicodeStreamString; DarkTheme: Boolean): TUnicodeStreamString;
-function PrepareCodeBlockScript(const ClassName, Theme: TUnicodeStreamString):
-  TUnicodeStreamString;
+function PrepareCodeBlockScript(const Theme: TUnicodeStreamString): TUnicodeStreamString;
 function GetThemeName(PrefersDark: Boolean): TUnicodeStreamString;
 function JsonEncode(const AString: TUnicodeStreamString): TUnicodeStreamString;
 
@@ -47,8 +55,10 @@ const
     '   <script src="https://%s/marked/gfm-heading-id.js"></script>' +
     '   <script src="https://%s/marked/custom-heading-id.js"></script>' +
     '   <script src="https://%s/marked/highlight.js"></script>' +
+    '   %s' + { load mermaid script }
     '   <style>' +
-    '     pre {' +
+    '     pre,' +
+          MERMAID_SELECTOR + '[data-processed=true] {' +
     '       background-color: inherit;' +
     '       border: 0;' +
     '     }' +
@@ -83,6 +93,7 @@ const
     '       );' +
     '       window.marked = marked;' +
     '       document.getElementById("content").innerHTML = await marked.parse("%s");' +
+    '       %s' + { render mermaid code blocks }
     '     } catch (e) {' +
     '       document.getElementById("content").innerHTML = `<p><kbd>${e}</kbd></p>`;' +
     '       console.error(e); '+
@@ -157,14 +168,44 @@ begin
   Result := WideFormat(WIRELOOM, [Title, EXT_DOMAIN, JsonEncode(Markup), GetThemeName(DarkTheme)]);
 end;
 
-function RenderMarkdown(Markup, Title: TUnicodeStreamString; DarkTheme: Boolean): TUnicodeStreamString;
+function RenderMarkdown(Markup, Title: TUnicodeStreamString; DarkTheme, Mermaid: Boolean):
+  TUnicodeStreamString;
+const
+  LOAD_MERMAID =
+    '<script src="https://' + EXT_DOMAIN + '/mermaid/index.js"' +
+    '  onload="(function() {' +
+    '    try {' +
+    '      let style = document.createElement(''link'');' +
+    '      let node = document.querySelector(''base'') || document.head.firstElementChild;' +
+    '      style.rel = ''stylesheet'';' +
+    '      style.href = ''https://cdn.jsdelivr.net/npm/@fontsource-variable/recursive@5/index.min.css'';' +
+    '      node.after(style);' +
+    '      mermaid.initialize({' +
+    '        startOnLoad: false,' +
+    '        securityLevel: ''loose'',' +
+    '        theme: ''%s'',' +
+    '        darkMode: %s' +
+    '      });' +
+    '    } catch (e) {' +
+    '        console.info(`mermaid: ${e}`);' +
+    '    }' +
+    '  })()">' +
+    '</script>';
 var
-  Theme: TUnicodeStreamString;
+  Theme, MermaidTheme, MermaidDarkMode, MermaidLoader, MermaidScript: TUnicodeStreamString;
 begin
   Theme := GetThemeName(DarkTheme);
+  MermaidLoader := '<!-- mermaid disabled by user -->';
+  MermaidScript := '/* mermaid disabled by user */';
+  if Mermaid then begin
+    MermaidTheme := BoolToStr(DarkTheme, 'redux-dark-color', 'redux-color');
+    MermaidDarkMode := BoolToStr(DarkTheme, 'true', 'false');
+    MermaidLoader := WideFormat(LOAD_MERMAID, [MermaidTheme, MermaidDarkMode]);
+    MermaidScript := MERMAID_JS;
+  end;
   Result := WideFormat(
     {$ifdef FPC}WideStringReplace{$else}StringReplace{$endif}(MARKDOWN, 'https://%s', 'https://'+EXT_DOMAIN, [rfReplaceAll]),
-    [Title, Theme, JsonEncode(Markup), PrepareCodeBlockScript(WL_CODE_BLOCK_CLASS, Theme)]);
+    [Title, Theme, MermaidLoader, JsonEncode(Markup), MermaidScript, PrepareCodeBlockScript(Theme)]);
 end;
 
 function PrepareMDScript(Markup: TUnicodeStreamString): TUnicodeStreamString;
@@ -193,8 +234,7 @@ begin
   Result := WideFormat(JS, [JsonEncode(Markup), GetThemeName(DarkTheme)]);
 end;
 
-function PrepareCodeBlockScript(const ClassName, Theme: TUnicodeStreamString):
-  TUnicodeStreamString;
+function PrepareCodeBlockScript(const Theme: TUnicodeStreamString): TUnicodeStreamString;
 const
   JS =
     '  try {' +
@@ -208,7 +248,7 @@ const
     '    console.error(e);' +
     '  }';
 begin
-  Result := WideFormat(JS, [ClassName, Theme]);
+  Result := WideFormat(JS, [WIRELOOM_SELECTOR, Theme]);
 end;
 
 function GetThemeName(PrefersDark: Boolean): TUnicodeStreamString;

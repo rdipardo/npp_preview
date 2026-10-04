@@ -87,6 +87,7 @@ type
     FReloadDOM: Boolean;
     FPreserveScrollPosition: Boolean;
     FRenderMarkdown: Boolean;
+    FRenderMermaid: Boolean;
     FRenderWireloom: Boolean;
 
     procedure SaveScrollPos;
@@ -442,14 +443,16 @@ ODS('FreeAndNil(FFilterThread);');
           if IsWireloom then
             ContentStream.Text := Renderwireloom(PlainText, BufferName, DarkTheme)
           else if IsMarkdown then
-            ContentStream.Text := RenderMarkdown(PlainText, BufferName, DarkTheme);
+            ContentStream.Text := RenderMarkdown(PlainText, BufferName, DarkTheme, FRenderMermaid);
           FReloadDOM := False;
         end else begin
           if IsWireloom then
             wbIE.ExecuteScript(PrepareWLScript(PlainText, DarkTheme))
           else if IsMarkdown then begin
             wbIE.ExecuteScript(PrepareMDScript(PlainText));
-            wbIE.ExecuteScript(PrepareCodeBlockScript(WL_CODE_BLOCK_CLASS, GetThemeName(DarkTheme)));
+            wbIE.ExecuteScript(PrepareCodeBlockScript(GetThemeName(DarkTheme)));
+            if FRenderMermaid then
+              wbIE.ExecuteScript(MERMAID_JS);
           end;
         end;
       end;
@@ -765,6 +768,7 @@ begin
   with TNppPluginPreviewHTML(Npp).GetSettings() do begin
     FRenderMarkdown := ReadBool('Extensions', 'Markdown', True);
     FRenderWireloom := ReadBool('Extensions', 'Wireloom', True);
+    FRenderMermaid  := FRenderMarkdown and ReadBool('Extensions', 'Mermaid', True);
     FPreserveScrollPosition := ReadBool('Scroll', 'Sticky', True);
     tmrAutorefresh.Interval := ReadInteger('Autorefresh', 'Interval', tmrAutorefresh.Interval);
     try

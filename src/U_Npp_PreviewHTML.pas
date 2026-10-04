@@ -525,6 +525,11 @@ begin
     CopyFileTree(FExtAssetsDir + 'marked', ConcatPaths([TModulePath.DLL,'ext','marked']),'*.js;*.txt');
   end;
 
+  if not FileExists(FExtAssetsDir + 'mermaid\index.js') then begin
+    CreateDir(FExtAssetsDir + 'mermaid');
+    CopyFileTree(FExtAssetsDir + 'mermaid', ConcatPaths([TModulePath.DLL,'ext','mermaid']),'*.js;*.txt');
+  end;
+
   if not FileExists(FExtAssetsDir + 'wireloom\index.js') then begin
     CreateDir(FExtAssetsDir + 'wireloom');
     CopyFileTree(FExtAssetsDir + 'wireloom', ConcatPaths([TModulePath.DLL,'ext','wireloom']),'*.js;*.txt');
