@@ -88,6 +88,7 @@ type
     FPreserveScrollPosition: Boolean;
     FRenderMarkdown: Boolean;
     FRenderMermaid: Boolean;
+    FRenderPlantUML: Boolean;
     FRenderWireloom: Boolean;
 
     procedure SaveScrollPos;
@@ -443,14 +444,16 @@ ODS('FreeAndNil(FFilterThread);');
           if IsWireloom then
             ContentStream.Text := Renderwireloom(PlainText, BufferName, DarkTheme)
           else if IsMarkdown then
-            ContentStream.Text := RenderMarkdown(PlainText, BufferName, DarkTheme, FRenderMermaid);
+            ContentStream.Text := RenderMarkdown(PlainText, BufferName, DarkTheme, FRenderMermaid, FRenderPlantUML);
           FReloadDOM := False;
         end else begin
           if IsWireloom then
             wbIE.ExecuteScript(PrepareWLScript(PlainText, DarkTheme))
           else if IsMarkdown then begin
             wbIE.ExecuteScript(PrepareMDScript(PlainText));
-            wbIE.ExecuteScript(PrepareCodeBlockScript(GetThemeName(DarkTheme)));
+            wbIE.ExecuteScript(PrepareCodeBlockScript('wireloom', GetThemeName(DarkTheme)));
+            if FRenderPlantUML then
+              wbIE.ExecuteScript(PrepareCodeBlockScript('plantuml', GetThemeName(DarkTheme)));
             if FRenderMermaid then
               wbIE.ExecuteScript(MERMAID_JS);
           end;
@@ -769,6 +772,7 @@ begin
     FRenderMarkdown := ReadBool('Extensions', 'Markdown', True);
     FRenderWireloom := ReadBool('Extensions', 'Wireloom', True);
     FRenderMermaid  := FRenderMarkdown and ReadBool('Extensions', 'Mermaid', True);
+    FRenderPlantUML := FRenderMarkdown and ReadBool('Extensions', 'PlantUML', True);
     FPreserveScrollPosition := ReadBool('Scroll', 'Sticky', True);
     tmrAutorefresh.Interval := ReadInteger('Autorefresh', 'Interval', tmrAutorefresh.Interval);
     try

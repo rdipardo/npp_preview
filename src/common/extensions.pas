@@ -18,6 +18,7 @@ uses
 const
   EXT_DOMAIN = 'preview.extensions';
   WIRELOOM_SELECTOR = 'code.language-wireloom';
+  PLANTUML_SELECTOR = 'code.language-plantuml';
   MERMAID_SELECTOR = 'code.language-mermaid';
   MERMAID_JS =
     'mermaid.run({' +
@@ -27,12 +28,12 @@ const
     '.then(() => true)' +
     '.catch(e => console.info(`mermaid: ${e}`));';
 
-function RenderMarkdown(Markup, Title: TUnicodeStreamString; DarkTheme, Mermaid: Boolean):
+function RenderMarkdown(Markup, Title: TUnicodeStreamString; DarkTheme, Mermaid, PlantUML: Boolean):
   TUnicodeStreamString;
 function RenderWireloom(Markup, Title: TUnicodeStreamString; DarkTheme: Boolean): TUnicodeStreamString;
 function PrepareMDScript(Markup: TUnicodeStreamString): TUnicodeStreamString;
 function PrepareWLScript(Markup: TUnicodeStreamString; DarkTheme: Boolean): TUnicodeStreamString;
-function PrepareCodeBlockScript(const Theme: TUnicodeStreamString): TUnicodeStreamString;
+function PrepareCodeBlockScript(const MIME, Theme: TUnicodeStreamString): TUnicodeStreamString;
 function GetThemeName(PrefersDark: Boolean): TUnicodeStreamString;
 function JsonEncode(const AString: TUnicodeStreamString): TUnicodeStreamString;
 
@@ -56,9 +57,11 @@ const
     '   <script src="https://%s/marked/custom-heading-id.js"></script>' +
     '   <script src="https://%s/marked/highlight.js"></script>' +
     '   %s' + { load mermaid script }
+    '   %s' + { load plantuml dependencies }
     '   <style>' +
     '     pre,' +
-          MERMAID_SELECTOR + '[data-processed=true] {' +
+          MERMAID_SELECTOR + '[data-processed=true],' +
+          PLANTUML_SELECTOR + '[id^=plantuml] {' +
     '       background-color: inherit;' +
     '       border: 0;' +
     '     }' +
@@ -108,6 +111,9 @@ const
     '     window.wireloom = wireloom;' +
     '     /* render wireloom code blocks */ %s'+
     '    }).catch(e => console.error(e));' +
+    '   </script>' +
+    '   <script type="module">' +
+    '    %s' + { render plantuml code blocks }
     '   </script>' +
     ' </body>' +
     '</html>';
@@ -163,12 +169,19 @@ begin
 {$endif};
 end;
 
+function BoolToStr(Expr: Boolean; const IfTrue, IfFalse: string): TUnicodeStreamString; overload;
+begin
+  Result := {$ifdef FPC}UTF8ToString{$endif}(IfFalse);
+  if Expr then
+    Result := {$ifdef FPC}UTF8ToString{$endif}(IfTrue);
+end;
+
 function RenderWireloom(Markup, Title: TUnicodeStreamString; DarkTheme: Boolean): TUnicodeStreamString;
 begin
   Result := WideFormat(WIRELOOM, [Title, EXT_DOMAIN, JsonEncode(Markup), GetThemeName(DarkTheme)]);
 end;
 
-function RenderMarkdown(Markup, Title: TUnicodeStreamString; DarkTheme, Mermaid: Boolean):
+function RenderMarkdown(Markup, Title: TUnicodeStreamString; DarkTheme, Mermaid, PlantUML: Boolean):
   TUnicodeStreamString;
 const
   LOAD_MERMAID =
@@ -191,21 +204,35 @@ const
     '    }' +
     '  })()">' +
     '</script>';
+
+  LOAD_PLANTUML =
+    'import("https://' + EXT_DOMAIN + '/plantuml/index.js").then(({ render }) => {' +
+    '  window.plantUMLRenderer = render;' +
+    '  /* render plantuml code blocks */ %s'+
+    '}).catch(e => console.info(e));';
+
 var
   Theme, MermaidTheme, MermaidDarkMode, MermaidLoader, MermaidScript: TUnicodeStreamString;
+  PlantUmlLoader, PlantUmlScript: TUnicodeStreamString;
 begin
   Theme := GetThemeName(DarkTheme);
   MermaidLoader := '<!-- mermaid disabled by user -->';
   MermaidScript := '/* mermaid disabled by user */';
+  PlantUmlLoader := '<!-- plantuml disabled by user -->';
+  PlantUmlScript := '/* plantuml disabled by user */';
   if Mermaid then begin
     MermaidTheme := BoolToStr(DarkTheme, 'redux-dark-color', 'redux-color');
     MermaidDarkMode := BoolToStr(DarkTheme, 'true', 'false');
     MermaidLoader := WideFormat(LOAD_MERMAID, [MermaidTheme, MermaidDarkMode]);
     MermaidScript := MERMAID_JS;
   end;
+  if PlantUML then begin
+    PlantUmlLoader := '<script src="https://' + EXT_DOMAIN + '/plantuml/viz-global.js"></script>';
+    PlantUmlScript := WideFormat(LOAD_PLANTUML, [PrepareCodeBlockScript('plantuml', Theme)]);
+  end;
   Result := WideFormat(
     {$ifdef FPC}WideStringReplace{$else}StringReplace{$endif}(MARKDOWN, 'https://%s', 'https://'+EXT_DOMAIN, [rfReplaceAll]),
-    [Title, Theme, MermaidLoader, JsonEncode(Markup), MermaidScript, PrepareCodeBlockScript(Theme)]);
+    [Title, Theme, MermaidLoader, PlantUmlLoader, JsonEncode(Markup), MermaidScript, PrepareCodeBlockScript('wireloom', Theme), PlantUmlScript]);
 end;
 
 function PrepareMDScript(Markup: TUnicodeStreamString): TUnicodeStreamString;
@@ -234,9 +261,9 @@ begin
   Result := WideFormat(JS, [JsonEncode(Markup), GetThemeName(DarkTheme)]);
 end;
 
-function PrepareCodeBlockScript(const Theme: TUnicodeStreamString): TUnicodeStreamString;
+function PrepareCodeBlockScript(const MIME, Theme: TUnicodeStreamString): TUnicodeStreamString;
 const
-  JS =
+  WIRELOOM_JS =
     '  try {' +
     '     Array.prototype.slice.call(document.querySelectorAll("%s")).reduce(async (n,c) => {' +
     '       const index = (typeof(n) === "number" ? n : await n);' +
@@ -247,8 +274,22 @@ const
     '  } catch (e) {' +
     '    console.error(e);' +
     '  }';
+
+  PLANTUML_JS =
+    '  try {' +
+    '     Array.prototype.slice.call(document.querySelectorAll("%s")).reduce((n,c) => {' +
+    '       c.id = `plantuml-diagram-${n}`;' +
+    '       plantUMLRenderer(c.innerText.split(/\r?\n/), c.id, { dark: %s });' +
+    '       return n+1;' +
+    '     }, 1);' +
+    '  } catch (e) {' +
+    '    console.error(e);' +
+    '  }';
 begin
-  Result := WideFormat(JS, [WIRELOOM_SELECTOR, Theme]);
+  if WideSameText('wireloom', MIME) then
+    Result := WideFormat(WIRELOOM_JS, [WIRELOOM_SELECTOR, Theme])
+  else
+    Result := WideFormat(PLANTUML_JS, [PLANTUML_SELECTOR, BoolToStr((Pos('dark', Theme) > 0), 'true', 'false')]);
 end;
 
 function GetThemeName(PrefersDark: Boolean): TUnicodeStreamString;
