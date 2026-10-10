@@ -37,6 +37,20 @@ function PrepareCodeBlockScript(const MIME, Theme: TUnicodeStreamString): TUnico
 function GetThemeName(PrefersDark: Boolean): TUnicodeStreamString;
 function JsonEncode(const AString: TUnicodeStreamString): TUnicodeStreamString;
 
+type
+  { ES5-compatible extensions for Internet Explorer }
+  Tes5 = class
+  public
+    class function RenderMarkdown(const AssetPath, Markup, Title, StyleSheetPath: TUnicodeStreamString;
+      DarkTheme: Boolean): TUnicodeStreamString;
+    class function RenderWireloom(const AssetPath, Markup, Title, StyleSheetPath: TUnicodeStreamString;
+      DarkTheme: Boolean): TUnicodeStreamString;
+    class function PrepareMDScript(const Markup: TUnicodeStreamString): TUnicodeStreamString;
+    class function PrepareWLScript(const Markup: TUnicodeStreamString; DarkTheme: Boolean; Interval: LongInt = 0):
+      TUnicodeStreamString;
+    class function PrepareCodeBlockScript(const MIME, Theme: TUnicodeStreamString): TUnicodeStreamString;
+  end;
+
 implementation
 {$ifdef FPC}
 uses
@@ -297,6 +311,147 @@ begin
   Result := 'default';
   if PrefersDark then
     Result := 'dark';
+end;
+
+{ Tes5 }
+
+class function Tes5.RenderMarkdown(const AssetPath, Markup, Title, StyleSheetPath: TUnicodeStreamString;
+  DarkTheme: Boolean): TUnicodeStreamString;
+const
+  MKD =
+    '<!DOCTYPE html>' +
+    '<html>' +
+    ' <head>' +
+    '   <title>%s</title>' +
+    '   <link rel="stylesheet" href="file:///%s">' +
+    '   <link rel="stylesheet" href="file:///%s/highlightjs/styles/%s.css">' +
+    '   <script src="file:///%s/highlightjs/es5/index.js"></script>' +
+    '   <script src="file:///%s/marked/es5/index.js"></script>' +
+    '   <script src="file:///%s/wireloom/es5/index.js"></script>' +
+    '   <style>' +
+    '     pre {' +
+    '       background-color: inherit;' +
+    '       border: none;' +
+    '     }' +
+    '     code {' +
+    '       font-family: "Consolas", monospace;' +
+    '       font-size: 70%;' +
+    '       overflow-x: auto;' +
+    '     }' +
+    '   </style>' +
+    ' </head>' +
+    ' <body>' +
+    '   <div id="content"></div>' +
+    '   <script>' +
+    '       function highlightFn (code, lang, info) {' +
+    '         var res = hljs.highlight(code, { language: (hljs.getLanguage(lang) ? lang : "plaintext") }) || {};' +
+    '         return res.value;' +
+    '       }' +
+    '       marked.use({' +
+    '         "gfm": true,' +
+    '         "breaks": false,' +
+    '         "langPrefix": "hljs language-",' +
+    '         "highlight": highlightFn,' +
+    '         "silent": true }' +
+    '       );' +
+    '       try {'+
+    '         window.marked = marked;' +
+    '         window.setTimeout(function() { '+
+    '           var el = document.getElementById("content");' +
+    '           el.innerHTML = (marked.parse("%s") || el.innerHTML);' +
+    '         }, 0);' +
+    '       } catch (e) {' +
+    '         document.getElementById("content").innerHTML = "<p><tt>"+e.toString()+"</tt></p>";' +
+    '       }' +
+    '   </script>' +
+    '   <script>' +
+    '     window.wireloom = wireloom;' +
+    '     window.setTimeout(function() { ' +
+    '       /* render wireloom code blocks */ %s' +
+    '     }, 120);' +
+    '   </script>' +
+    ' </body>' +
+    '</html>';
+
+var
+  Theme: TUnicodeStreamString;
+begin
+  Theme := GetThemeName(DarkTheme);
+  Result := WideFormat(
+    {$ifdef FPC}WideStringReplace{$else}StringReplace{$endif}(MKD, 'file:///%s/', 'file:///' + AssetPath, [rfReplaceAll]),
+    [Title, StyleSheetPath, Theme, JsonEncode(Markup), Tes5.PrepareCodeBlockScript('wireloom', Theme)]);
+end;
+
+class function Tes5.RenderWireloom(const AssetPath, Markup, Title, StyleSheetPath: TUnicodeStreamString;
+  DarkTheme: Boolean): TUnicodeStreamString;
+const
+  WL =
+    '<!DOCTYPE html>' +
+    '<html>' +
+    ' <head>' +
+    '  <title>%s</title>' +
+    '   <link rel="stylesheet" href="file:///%s">' +
+    '   <script src="file:///%swireloom/es5/index.js"></script>' +
+    ' </head>' +
+    ' <body>' +
+    '   <div id="content"></div>' +
+    '   <script>' +
+    '     window.wireloom = wireloom;' +
+    '     /* render wireloom code blocks */ %s'+
+    '   </script>' +
+    ' </body>' +
+    '</html>';
+
+begin
+  Result := WideFormat(WL, [Title, StyleSheetPath, AssetPath, Tes5.PrepareWLScript(Markup, DarkTheme)]);
+end;
+
+class function Tes5.PrepareMDScript(const Markup: TUnicodeStreamString): TUnicodeStreamString;
+const
+  JS =
+    'try {' +
+    '  var el = document.getElementById("content");' +
+    '  el.innerHTML = (marked.parse("%s") || el.innerHTML);' +
+    '} catch (e) {' +
+    '  document.getElementById("content").innerHTML = "<p><tt>"+e.toString()+"</tt></p>";' +
+    '}';
+begin
+  Result := WideFormat(JS, [JsonEncode(Markup)]);
+end;
+
+class function Tes5.PrepareWLScript(const Markup: TUnicodeStreamString; DarkTheme: Boolean; Interval: LongInt):
+  TUnicodeStreamString;
+const
+  JS =
+    'window.setTimeout(function() { ' +
+    '  wireloom.render(document.title || "wireframe", "%s", { "theme": "%s" })' +
+    '   .then(function(res) {' +
+    '      var el = document.getElementById("content");' +
+    '      el.innerHTML = (res.svg || el.innerHTML);' +
+    '   }).catch(function(e) {' +
+    '     document.getElementById("content").innerHTML = "<p><tt>"+e.toString()+"</tt></p>";' +
+    '  });' +
+    '}, %d);';
+begin
+  Result := WideFormat(JS, [JsonEncode(Markup), GetThemeName(DarkTheme), Interval]);
+end;
+
+class function Tes5.PrepareCodeBlockScript(const MIME, Theme: TUnicodeStreamString): TUnicodeStreamString;
+const
+  WIRELOOM_JS =
+    'try {' +
+    '  Array.prototype.slice.call(document.querySelectorAll("%s")).reduce(function(n,c) {' +
+    '   wireloom.render("wireframe-"+n.toString(), c.parentNode.innerText, { "theme": "%s" })' +
+    '   .then(function(res) { c.parentNode.innerHTML = (res.svg || c.innerHTML); })' +
+    '   .catch(function(e) { c.parentNode.innerHTML = "<p><tt>"+e.toString()+"</tt></p>"; });' +
+    '   return n+1;' +
+    ' }, 1);' +
+    '} catch (_) { }';
+
+begin
+  Result := '';
+  if WideSameText('wireloom', MIME) then
+    Result := WideFormat(WIRELOOM_JS, [WIRELOOM_SELECTOR, Theme])
 end;
 
 end.

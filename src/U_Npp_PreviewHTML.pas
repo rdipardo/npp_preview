@@ -481,9 +481,9 @@ begin
 
   self.AddFuncItem('Edit &settings', _FuncOpenSettings);
   self.AddFuncItem('Edit &filter definitions', _FuncOpenFilters);
+  StyleDlgId := self.AddFuncItem('Edit default &CSS', _FuncOpenDefaultStyleSheet);
 
   if FCanUseWebView2 then begin
-    StyleDlgId := self.AddFuncItem('Edit default &CSS', _FuncOpenDefaultStyleSheet);
     ScriptDlgId := self.AddFuncItem('Edit default &JavaScript', _FuncOpenUserScript);
   end;
 
@@ -541,7 +541,23 @@ begin
   end;
 
   if not FCanUseWebView2 then
+  begin
+    if not FileExists(FExtAssetsDir + 'highlightjs\es5\index.js') then begin
+      CreateDir(FExtAssetsDir + 'highlightjs\es5');
+      CopyFileTree(FExtAssetsDir + 'highlightjs\es5', ConcatPaths([TModulePath.DLL,'ext','highlightjs','es5']),'*.js');
+    end;
+
+    if not FileExists(FExtAssetsDir+'marked\es5\index.js') then begin
+      CreateDir(FExtAssetsDir + 'marked\es5');
+      CopyFileTree(FExtAssetsDir + 'marked\es5', ConcatPaths([TModulePath.DLL,'ext','marked','es5']),'*.js');
+    end;
+
+    if not FileExists(FExtAssetsDir + 'wireloom\es5\index.js') then begin
+      CreateDir(FExtAssetsDir + 'wireloom\es5');
+      CopyFileTree(FExtAssetsDir + 'wireloom\es5', ConcatPaths([TModulePath.DLL,'ext','wireloom','es5']),'*.js');
+    end;
     Exit;
+  end;
 
   try
     GlobalWebView2Loader := TWVLoader.Create(nil);
@@ -819,6 +835,7 @@ begin
     Exit;
   if Assigned(frmIEPreview) and frmIEPreview.Visible then begin
     frmIEPreview.ReloadSettings;
+    frmIEPreview.ReloadDOM := True;
     frmIEPreview.btnRefresh.Click;
   end else if Assigned(frmWV2Preview) and frmWV2Preview.Visible then begin
     frmWV2Preview.ReloadSettings;

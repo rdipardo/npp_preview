@@ -1,0 +1,25 @@
+{
+  "name": "esm-to-es5",
+  "version": "0.0.1",
+  "description": "es5 versions of Preview HTML's 3rd party JS APIs",
+  "scripts": {
+    "marked": "babel src/marked@*/*.js -o dist/marked.js",
+    "hljs": "babel ../ext/highlightjs/*.js -o dist/hljs.js --config-file ./.babelrc.json",
+    "wireloom": "babel ../ext/wireloom/*.js  -o dist/wireloom.js --config-file ./.babelrc.json",
+    "marked:pack": "npm run marked && esbuild dist/marked.js --inject:./node_modules/core-js/es/index.js --outfile=../ext/marked/es5/index.js --minify --bundle --format=iife --global-name=marked --target=es5",
+    "hljs:pack": "npm run hljs && esbuild dist/hljs.js --inject:./node_modules/core-js/es/index.js --outfile=../ext/highlightjs/es5/index.js --minify --bundle --format=iife --global-name=hljs --target=es5",
+    "wireloom:pack": "npm run wireloom && esbuild dist/wireloom.js --inject:./node_modules/core-js/es/index.js --outfile=../ext/wireloom/es5/index.js --minify --bundle --format=iife --global-name=wireloom --target=es5",
+    "build": "npm run marked:pack && npm run hljs:pack && npm run wireloom:pack"
+  },
+  "devDependencies": {
+    "@babel/cli": "^8.0.6",
+    "@babel/core": "^8.0.6",
+    "@babel/preset-env": "^8.0.6",
+    "core-js": "^3.50.0",
+    "esbuild": "0.28.2"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "core-js@3.50.0": true
+  }
+}

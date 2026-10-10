@@ -21,6 +21,7 @@ uses
   NppPlugin, NppDockingForms,
   WebBrowser,
   customstreams,
+  extensions,
   U_CustomFilter;
 
 type
@@ -52,6 +53,7 @@ type
       dwFlags: Cardinal; const bstrUrlContext, bstrUrl: WideString);
     procedure wbIEStatusTextChange(ASender: TObject; const Text: WideString);
     procedure wbIEStatusBar(ASender: TObject; StatusBar: WordBool);
+    procedure ExecuteScript(const Code: WideString);
     procedure btnCloseStatusbarClick(Sender: TObject);
     procedure btnAboutClick(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
@@ -72,6 +74,9 @@ type
     FScrollTop: Integer;
     FScrollLeft: Integer;
     FEnsureRendered: Boolean;
+    FReloadDOM: Boolean;
+    FRenderMarkdown: Boolean;
+    FRenderWireloom: Boolean;
 
     procedure SaveScrollPos;
     procedure RestoreScrollPos(const BufferID: TBufferID);
@@ -91,6 +96,7 @@ type
     procedure ReloadSettings;
     procedure ForgetBuffer(const BufferID: TBufferID);
     procedure DisplayPreview(const BufferID: TBufferID);
+    property  ReloadDOM: Boolean write FReloadDOM;
   end;
 
 var
@@ -181,6 +187,10 @@ begin
     sbrIE.Canvas.Brush.Color := TColor(Palette.Background);
   end else
     sbrIE.Canvas.Brush.Color := GetRGBColorResolvingParent;
+
+  ReloadSettings;
+  FReloadDOM := True;
+  BtnRefresh.Click;
 end;
 
 procedure TFrmIEPreview.SubclassAndTheme(DmfMask: Cardinal);
@@ -244,13 +254,30 @@ end {TFrmIEPreview.tmrAutorefreshTimer};
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TFrmIEPreview.btnRefreshClick(Sender: TObject);
+  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
+  function HasFileExt (const exts: array of nppString; BuffID: TBufferID): Boolean;
+  var I: Integer;
+  begin
+    Result := False;
+    for I:=0 to Length(exts) - 1 do
+    begin
+      if WideSameText(exts[i], Npp.GetCurrentFileExt(BuffID)) then
+      begin
+        Result := True;
+        Break;
+      end;
+    end;
+  end;
+  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -}
 var
   BufferID: TBufferID;
   Lexer: TNppLang;
-  IsHTML, IsXML, IsCustom: Boolean;
+  IsHTML, IsXML, IsCustom, IsMarkdown, IsWireloom: Boolean;
+  DarkTheme, PreserveDOM: Boolean;
   Size: WPARAM;
-  HTML: TUnicodeStreamString;
+  HTML, PlainText, BufferPath, StyleSheetPath: TUnicodeStreamString;
   FilterName: string;
+  BufferName: array[0..MAX_PATH] of nppChar;
   CodePage: NativeInt;
 begin
   if chkFreeze.Checked then
@@ -275,10 +302,13 @@ ODS('FreeAndNil(FFilterThread);');
       {--- MCO 22-01-2013: determine whether the current document matches a custom filter ---}
       FilterName := DetermineCustomFilter;
       IsCustom := Length(FilterName) > 0;
+      IsWireloom := FRenderWireloom and HasFileExt(['.wireloom'], BufferID);
+      IsMarkdown := (not IsCustom) and FRenderMarkdown and
+        HasFileExt(['.markdown','.md','.mkd','.mkdn','.mdwn','.mdown','.mdoc','.mdtext','.mdtxt'], BufferID);
 
       {$MESSAGE HINT 'TODO: Find a way to communicate why there is no preview, depending on the situation — MCO 22-01-2013'}
 
-      if IsXML or IsHTML or IsCustom then begin
+      if IsXML or IsHTML or IsCustom or IsMarkdown or IsWireloom then begin
         CodePage := FSciDirectFunc(FSciDirectPtr, SCI_GETCODEPAGE, 0, 0);
         Size := FSciDirectFunc(FSciDirectPtr, SCI_GETTEXT, 0, 0);
         Inc(Size);
@@ -298,11 +328,37 @@ ODS('FreeAndNil(FFilterThread);');
           wbIEStatusTextChange(wbIE, WideFormat('Failed filter %s...', [FilterName]));
           ContentStream.Text := '<pre style="color: darkred">ExecuteCustomFilter returned False</pre>';
         end;
+      end else if IsMarkdown or IsWireloom then begin
+        SendMessage(Self.Npp.NppData.NppHandle, NPPM_GETNAMEPART, MAX_PATH, LPARAM(@BufferName[0]));
+        PlainText := Copy(HTML, 0, Length(HTML) - Length(TUnicodeStreamString(#$0000)));
+        PreserveDOM := (not FReloadDOM) and FScrollPositions.ContainsKey(BufferID);
+        DarkTheme := Npp.IsDarkModeEnabled;
+        if not PreserveDOM then begin
+          BufferPath := WideStringReplace(TNppPluginPreviewHTML(Npp).ExtAssetDir, PathDelim, '/', [rfReplaceAll]);
+          StyleSheetPath := WideStringReplace(TNppPluginPreviewHTML(Npp).AssetDir, PathDelim, '/', [rfReplaceAll]);
+          if DarkTheme then
+            StyleSheetPath := StyleSheetPath + '/' + DEFAULT_DARK_STYLE_SHEET
+          else
+            StyleSheetPath := StyleSheetPath + '/' + DEFAULT_STYLE_SHEET;
+          if IsWireloom then
+            ContentStream.Text := Tes5.RenderWireloom(BufferPath, PlainText, BufferName, StyleSheetPath, DarkTheme)
+          else if IsMarkdown then
+            ContentStream.Text := Tes5.RenderMarkdown(BufferPath, PlainText, BufferName, StyleSheetPath, DarkTheme);
+          FReloadDOM := False;
+        end else begin
+          if IsWireloom then
+            ExecuteScript(Tes5.PrepareWLScript(PlainText, DarkTheme, tmrAutorefresh.Interval div 4))
+          else if IsMarkdown then begin
+            ExecuteScript(Tes5.PrepareMDScript(PlainText));
+            ExecuteScript(Tes5.PrepareCodeBlockScript('wireloom', GetThemeName(DarkTheme)));
+          end;
+        end;
       end else if IsXML then begin
         ContentStream.Text := TransformXMLToHTML(HTML);
       end;
 
-      DisplayPreview(BufferID);
+      if not PreserveDOM then
+        DisplayPreview(BufferID);
     finally
       Screen.Cursor := crDefault;
     end;
@@ -472,6 +528,8 @@ end {TFrmIEPreview.ForgetBuffer};
 procedure TFrmIEPreview.ReloadSettings;
 begin
   with TNppPluginPreviewHTML(Npp).GetSettings() do begin
+    FRenderMarkdown := ReadBool('Extensions', 'Markdown', True);
+    FRenderWireloom := ReadBool('Extensions', 'Wireloom', True);
     tmrAutorefresh.Interval := ReadInteger('Autorefresh', 'Interval', tmrAutorefresh.Interval);
     Free;
   end;
@@ -686,6 +744,7 @@ begin
   ReloadSettings;
   SendMessage(self.Npp.NppData.NppHandle, NPPM_SETMENUITEMCHECK, self.CmdID, 1);
   FEnsureRendered := True;
+  FReloadDOM := True;
   ResetTimer;
 end;
 
@@ -859,6 +918,19 @@ procedure TFrmIEPreview.wbIETitleChange(ASender: TObject; const Text: WideString
 begin
   inherited;
   self.UpdateDisplayInfo({$ifdef FPC}UTF8Encode{$endif}(WideStringReplace(Text, 'about:blank', '', [rfReplaceAll])));
+end;
+
+{ ------------------------------------------------------------------------------------------------ }
+procedure TFrmIEPreview.ExecuteScript(const Code: WideString);
+var
+  ParentWnd: IHTMLWindow2;
+begin
+  if Assigned(wbIE.Document) then
+  begin
+    ParentWnd := (wbIE.Document as IHTMLDocument2).ParentWindow as IHTMLWindow2;
+    if Assigned(ParentWnd) then
+      ParentWnd.execScript(Code, 'javascript');
+  end;
 end;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

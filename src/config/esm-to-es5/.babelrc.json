@@ -1,0 +1,14 @@
+{
+  "presets": [
+    [
+      "@babel/preset-env",
+      {
+        "targets": {
+          "ie": "7",
+        },
+        "modules": "cjs",
+        "corejs": "3"
+      }
+    ]
+  ]
+}
