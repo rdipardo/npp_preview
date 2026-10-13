@@ -39,12 +39,48 @@ if %errorlevel%==1 ( goto :USAGE ) else ( goto :TheEnd )
 :32
 :i386
 if "%FPC_BUILD_ALL%" NEQ "" ( rmdir /S /Q "out\obj\i386-win32\%FPC_BUILD_TYPE%" 2>NUL: )
+
+call :%FPC_BUILD_TYPE% 2>NUL:
+if %errorlevel%==1 ( goto :USAGE ) else ( goto :TheEnd )
+
+:Release
+lazbuild %FPC_BUILD_ALL% --bm=%FPC_BUILD_TYPE% --cpu=i386 src\prj\PreviewHTML.lpi ^
+  --opt=-FW%~dp0out\obj\i386-win32\%FPC_BUILD_TYPE%\PreviewHTML\PreviewHTML.fwo ^
+  --opt=-OWoptvmts ^
+  --opt=-OWdevirtcalls ^
+  --opt=-v0
+
+lazbuild --bm=%FPC_BUILD_TYPE% --cpu=i386 src\prj\PreviewHTML.lpi ^
+  --opt=-Fw%~dp0out\obj\i386-win32\%FPC_BUILD_TYPE%\PreviewHTML\PreviewHTML.fwo ^
+  --opt=-Owoptvmts ^
+  --opt=-Owdevirtcalls
+goto :TheEnd
+
+:Debug
 lazbuild %FPC_BUILD_ALL% --bm=%FPC_BUILD_TYPE% --cpu=i386 src\prj\PreviewHTML.lpi -q
 goto :TheEnd
 
 :64
 :x86_64
 if "%FPC_BUILD_ALL%" NEQ "" ( rmdir /S /Q "out\obj\x86_64-win64\%FPC_BUILD_TYPE%" 2>NUL: )
+
+call :%FPC_BUILD_TYPE% 2>NUL:
+if %errorlevel%==1 ( goto :USAGE ) else ( goto :TheEnd )
+
+:Release
+lazbuild %FPC_BUILD_ALL% --bm=%FPC_BUILD_TYPE% --cpu=x86_64 src\prj\PreviewHTML.lpi ^
+  --opt=-FW%~dp0out\obj\x86_64-win64\%FPC_BUILD_TYPE%\PreviewHTML\PreviewHTML.fwo ^
+  --opt=-OWoptvmts ^
+  --opt=-OWdevirtcalls ^
+  --opt=-v0
+
+lazbuild --bm=%FPC_BUILD_TYPE% --cpu=x86_64 src\prj\PreviewHTML.lpi ^
+  --opt=-Fw%~dp0out\obj\x86_64-win64\%FPC_BUILD_TYPE%\PreviewHTML\PreviewHTML.fwo ^
+  --opt=-Owoptvmts ^
+  --opt=-Owdevirtcalls
+goto :TheEnd
+
+:Debug
 lazbuild %FPC_BUILD_ALL% --bm=%FPC_BUILD_TYPE% --cpu=x86_64 src\prj\PreviewHTML.lpi -q
 goto :TheEnd
 
