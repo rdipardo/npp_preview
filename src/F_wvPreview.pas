@@ -530,7 +530,7 @@ ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy({$ifdef 
           Inc(HeadStart, 6)
         else
           HeadStart := 1;
-        Insert('<base href="' + WideFormat('https://%s/%s', [APP_DOMAIN, ExtractFileName(Filename)]) + '" />', HTML, HeadStart);
+        Insert('<base href="https://' + APP_DOMAIN + '/' + ExtractFileName(Filename) + '" />', HTML, HeadStart);
         wbIE.SetVirtualHostNameToFolderMapping(APP_DOMAIN, ExtractFileDir(Filename), COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW);
         if FHasDefaultStyle or FHasDefaultScript then
           wbIE.SetVirtualHostNameToFolderMapping(ASSET_DOMAIN,
@@ -567,22 +567,23 @@ ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy({$ifdef 
           AssetURL := {$ifdef FPC}UTF8ToString{$endif}(FRemoteAssets.Strings[HeadStart]);
           if WideSameText(RightStr(AssetURL, 4), '.css') then
             wbIE.ExecuteScript(WideFormat(INJECT_USER_STYLE,
-              [WideFormat('https://cdn.jsdelivr.net/npm/%s', [AssetURL])]))
+              ['https://cdn.jsdelivr.net/npm/' + AssetURL]))
           else if (PosEx('auto-render', AssetURL, Pos('katex', AssetURL)) <> 0) then
             // Ensure KaTeX library has time to load before the auto-render script
-            wbIE.ExecuteScript(WideFormat('window.setTimeout(() => { %s }, 800)',
-              [WideFormat({$ifdef FPC}WideStringReplace{$else}StringReplace{$endif}(
-                INJECT_3RD_PARTY_SCRIPT, 'defer = true', 'defer = false', []), [AssetURL])]))
+            wbIE.ExecuteScript('window.setTimeout(() => { ' +
+              WideFormat({$ifdef FPC}WideStringReplace{$else}StringReplace{$endif}(
+                INJECT_3RD_PARTY_SCRIPT, 'defer = true', 'defer = false', []), [AssetURL]) +
+              ' }, 800);')
           else
             wbIE.ExecuteScript(WideFormat(INJECT_3RD_PARTY_SCRIPT, [AssetURL]));
         end;
       end;
       if FHasDefaultStyle then
         wbIE.ExecuteScript(WideFormat(INJECT_USER_STYLE,
-          [WideFormat('https://%s/%s', [ASSET_DOMAIN, ExtractFileName(FDefaultStyleSheet)])]));
+          ['https://' + ASSET_DOMAIN + '/' + ExtractFileName(FDefaultStyleSheet)]));
       if FHasDefaultScript then
         wbIE.ExecuteScript(WideFormat(INJECT_USER_SCRIPT,
-          [WideFormat('https://%s/%s', [ASSET_DOMAIN, ExtractFileName(FDefaultScript)])]));
+          ['https://' + ASSET_DOMAIN + '/' + ExtractFileName(FDefaultScript)]));
       FBufferID := BufferID;
     end;
   except
@@ -599,7 +600,7 @@ function TFrmWebView2Preview.UpdatePreview(const BufferID: TBufferID): Boolean;
 begin
   Result := FScrollPositions.ContainsKey(BufferID);
   if Result and (wbIE <> nil) then
-    wbIE.ExecuteScript(WideFormat('document.body.innerHTML = "%s";', [JsonEncode(ContentStream.Text)]));
+    wbIE.ExecuteScript('document.body.innerHTML = "' + JsonEncode(ContentStream.Text) + '";');
   SaveScrollPos;
 end {TFrmWebView2Preview.UpdatePreview};
 
@@ -682,16 +683,15 @@ begin
         not (TNppPluginPreviewHTML(Npp).FileType in [L_HTML, L_PHP, L_ASP, L_JSP, L_XML]) then
       begin
         EventArgs.Cancel := True;
-        wbie.ExecuteScript(WideFormat('window.location.hash = "%s";',
-          [wvString(StrRScan(@EventArgs.Uri[1], #$0023))]));
+        wbie.ExecuteScript('window.location.hash = "' + wvString(StrRScan(@EventArgs.Uri[1], #$0023)) + '";');
       end;
       // Target is an anchor within the same document -- reload user assets, if any
       if FHasDefaultStyle then
         wbIE.ExecuteScript(WideFormat(INJECT_USER_STYLE,
-          [WideFormat('https://%s/%s', [ASSET_DOMAIN, ExtractFileName(FDefaultStyleSheet)])]));
+          ['https://' + ASSET_DOMAIN + '/' + ExtractFileName(FDefaultStyleSheet)]));
       if FHasDefaultScript then
         wbIE.ExecuteScript(WideFormat(INJECT_USER_SCRIPT,
-          [WideFormat('https://%s/%s', [ASSET_DOMAIN, ExtractFileName(FDefaultScript)])]));
+          ['https://' + ASSET_DOMAIN + '/' + ExtractFileName(FDefaultScript)]));
     end;
   finally
     FreeAndNil(EventArgs);
@@ -826,21 +826,21 @@ begin
             Delimiter := ',';
             DelimitedText := Trim(ReadString('MathJax', 'Components', 'tex-svg'));
             for i := 0 to Count - 1 do
-              FRemoteAssets.Add(Format('%s/%s.min.js', [AssetURL, Strings[i]]));
+              FRemoteAssets.Add(AssetURL + '/' + Strings[i] + '.min.js');
           finally
             Free;
           end;
         end;
       end else if ValueExists('Katex', 'Version') then begin
         AssetURL := 'katex@' + Trim(ReadString('Katex', 'Version', '0.18'));
-        FRemoteAssets.Add(Format('%s/dist/katex.min.css', [AssetURL]));
-        FRemoteAssets.Add(Format('%s/dist/katex.min.js', [AssetURL]));
+        FRemoteAssets.Add(AssetURL + '/dist/katex.min.css');
+        FRemoteAssets.Add(AssetURL + '/dist/katex.min.js');
         if ReadBool('Katex', 'AutoRender', True) then
-          FRemoteAssets.Add(Format('%s/dist/contrib/auto-render.min.js', [AssetURL]));
+          FRemoteAssets.Add(AssetURL + '/dist/contrib/auto-render.min.js');
       end;
       if ValueExists('jQuery', 'Version') then begin
         AssetURL := 'jquery@' + Trim(ReadString('jQuery', 'Version', '3'));
-        FRemoteAssets.Add(Format('%s/dist/jquery.min.js', [AssetURL]));
+        FRemoteAssets.Add(AssetURL + '/dist/jquery.min.js');
       end;
     finally
       Free;

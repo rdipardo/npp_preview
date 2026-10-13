@@ -230,18 +230,18 @@ begin
     RegValues := TStringList.Create;
     RegKey := TRegistry.Create(KEY_READ);
     RegKey.RootKey := HKEY_LOCAL_MACHINE;
-    SubKeyPath := WideFormat('%s\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}', [SubKeyx64]);
+    SubKeyPath := SubKeyx64 + '\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
     SysInfo := Default(TSystemInfo);
 
     GetSystemInfo(SysInfo);
     if SysInfo.wProcessorArchitecture = PROCESSOR_ARCHITECTURE_INTEL then
-      SubKeyPath := WideFormat('%s\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}', [SubKeyx86]);
+      SubKeyPath := SubKeyx86 + '\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
 
     if RegKey.KeyExists(SubKeyPath) and RegKey.OpenKeyReadOnly(SubKeyPath) then
       RegKey.GetValueNames(RegValues);
 
     if (RegValues.IndexOf('Location') > -1) and (RegValues.IndexOf('Pv') > -1) then
-      Result := FileExists(WideFormat('%s\%s\msedgewebview2.exe', [RegKey.ReadString('Location'), RegKey.ReadString('Pv')]));
+      Result := FileExists(RegKey.ReadString('Location') + '\' + RegKey.ReadString('Pv') + '\msedgewebview2.exe');
   finally
     RegKey.CloseKey;
     FreeAndNil(RegKey);
