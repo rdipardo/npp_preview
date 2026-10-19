@@ -1,6 +1,6 @@
 version: 2.1
 #
-# SPDX-FileCopyrightText: Copyright (c) 2025 Robert Di Pardo
+# SPDX-FileCopyrightText: Copyright (c) 2025,2026 Robert Di Pardo
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 orbs:
@@ -16,7 +16,9 @@ references:
       tags:
         only: /v.*/
   production: &production
-    context: gh-release-authoring
+    context:
+      - azure
+      - gh-release-authoring
     filters:
       branches:
         ignore: /.*/
@@ -74,14 +76,6 @@ jobs:
           method: full
       - attach_workspace:
           at: .
-      - store_artifacts:
-          name: Upload << pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_win32.zip
-          path: out/<< pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_win32.zip
-          destination: << pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_win32.zip
-      - store_artifacts:
-          name: Upload << pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_x64.zip
-          path: out/<< pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_x64.zip
-          destination: << pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_x64.zip
       - run:
           name: Create GitHub Release
           command: bash.exe .circleci/scripts/gh_release.sh
@@ -91,13 +85,73 @@ jobs:
             SLUGX64: << pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_x64.zip
             BIN_DIR: out
 
+  sign_artifacts:
+    <<: *executor
+    environment:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      PLUGIN_DLL: ./out/i386-win32/Release/<< pipeline.parameters.plugin_name >>.dll
+      PLUGIN_x64_DLL: ./out/x86_64-win64/Release/<< pipeline.parameters.plugin_name >>.dll
+      SLUG_x86: ./out/<< pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_win32.zip
+      SLUG_x64: ./out/<< pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_x64.zip
+    steps:
+      - checkout:
+          method: full
+      - attach_workspace:
+          at: .
+      - run:
+          name: Install code signing CLI tool
+          command: dotnet tool install -g --prerelease sign
+      - run:
+          name: Login to Azure
+          command: |
+            az login `
+                --service-principal `
+                --user "${env:AZURE_CLIENT_ID}" `
+                --tenant "${env:AZURE_TENANT_ID}" `
+                --federated-token "${env:CIRCLE_OIDC_TOKEN}" | Out-Null
+      - run:
+          name: Sign release artifacts
+          command: |
+            sign code artifact-signing `
+                --azure-credential-type azure-cli `
+                --verbosity warning `
+                --timestamp-url http://timestamp.acs.microsoft.com `
+                --artifact-signing-endpoint https://ncus.codesigning.azure.net `
+                --artifact-signing-account devcerts `
+                --artifact-signing-certificate-profile gha-artifact-signing `
+                "$env:PLUGIN_DLL" `
+                "$env:PLUGIN_x64_DLL"
+      - run:
+          name: Pack release archives
+          command: |
+            $CONFIG_DIR='.\src\Config'
+            $FPC_DIR='.\out\3RD-PARTY'
+            if (Test-Path -Path '.\out\*.zip') { Remove-Item '.\out\*.zip' }
+            7z a -tzip $env:SLUG_x86 $env:PLUGIN_DLL .\out\*.txt "$CONFIG_DIR\*.*" "$CONFIG_DIR\ext" $FPC_DIR -y
+            7z a -tzip $env:SLUG_x64 $env:PLUGIN_x64_DLL .\out\*.txt "$CONFIG_DIR\*.*" "$CONFIG_DIR\ext" $FPC_DIR -y
+      - store_artifacts:
+          name: Upload << pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_win32.zip
+          path: out/<< pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_win32.zip
+          destination: << pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_win32.zip
+      - store_artifacts:
+          name: Upload << pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_x64.zip
+          path: out/<< pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_x64.zip
+          destination: << pipeline.parameters.plugin_name >>_<< pipeline.git.tag >>_x64.zip
+      - persist_to_workspace:
+          root: .
+          paths: out
+
 workflows:
   lazarus_build:
     jobs:
       - build:
           <<: *development
-      - push_release:
+      - sign_artifacts:
           <<: *production
           requires:
             - build
+      - push_release:
+          <<: *production
+          requires:
+            - sign_artifacts
 
