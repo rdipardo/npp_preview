@@ -26,7 +26,7 @@
   </picture>
 </div>
 
-*Preview HTML* enables live previews of HTML and Markdown pages, or any another file type that can be converted to HTML by user-defined [filters](https://github.com/rdipardo/npp_preview/wiki/Filters).
+*Preview HTML* enables live previews of HTML and Markdown pages, or any other file that can be converted to HTML by user-defined [filters](https://github.com/rdipardo/npp_preview/wiki/Filters).
 
 It is written in Object Pascal and can be built using [Delphi] or [Lazarus].
 

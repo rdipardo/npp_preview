@@ -1,13 +1,22 @@
 Preview HTML plugin for Notepad++
 =================================
 
+v1.4.8.0, 2026-10-20
+--------------------
+- Changed: release DLLs are now digitally signed
+- Added: (WebView2) [new options][v1480-feat] to enable offline previews of Mermaid and PlantUML diagrams in Markdown files
+- Added: (IE) [new options][v1480-feat] to enable offline previews of Markdown and standalone wireloom files
+
+> [!NOTE]
+> All Markdown settings are enabled by default, no configuration necessary.
+
 v1.4.7.0, 2026-09-26
 --------------------
 - Fixed: (WebView2) KaTeX's auto-render script should now load with fewer errors
 - Changed: (WebView2) the default user stylesheets have been renamed to ensure the latest versions are loaded
 - Changed: XML transformation *via* `MSXML2.DOMDocument` is disabled except when Internet Explorer is the active browser
            (set [`Emulation.NoEdge`][new option] to `1`)
-- Added: (WebView2) [new options][v1470-feat] to enable offline previews of Markdown and standalone wireloom files
+- Added: (WebView2) [new options][v1480-feat] to enable offline previews of Markdown and standalone wireloom files
            (enabled by default, no configuration necessary)
 
 v1.4.6.0, 2026-08-28
@@ -147,7 +156,7 @@ v1.1.0.0, 2013-01-20
 [#11]: https://github.com/rdipardo/npp_preview/issues/11#issuecomment-5455482287
 [wiki homepage]: https://github.com/rdipardo/npp_preview/wiki
 [custom filters]: https://github.com/rdipardo/npp_preview/wiki/Filters
-[v1470-feat]: https://github.com/rdipardo/npp_preview/wiki/Settings#extensions
+[v1480-feat]: https://github.com/rdipardo/npp_preview/wiki/Settings#extensions
 [v1460-feat]: https://github.com/rdipardo/npp_preview/wiki/Settings#example-1
 [new option]: https://github.com/rdipardo/npp_preview/wiki/Settings#example-2
 [a017892ab7]: https://fossil.2of4.net/npp_preview/tktview/a017892ab7
