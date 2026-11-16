@@ -285,6 +285,7 @@ begin
 
   try
     tmrAutorefresh.Enabled := False;
+    PreserveDOM := False;
 ODS('FreeAndNil(FFilterThread);');
     FreeAndNil(FFilterThread);
     SaveScrollPos;
