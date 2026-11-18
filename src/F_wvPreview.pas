@@ -42,8 +42,9 @@ type
     btnRefresh: TButton;
     btnClose: TButton;
     sbrIE: TStatusBar;
-    btnAbout, btnNavBack, btnNavForward: TBitBtn;
+    btnSaveAs, btnAbout, btnNavBack, btnNavForward: TBitBtn;
     tmrAutorefresh: TTimer;
+    dlgExportHTML: TSaveDialog;
     chkFreeze: TCheckBox;
     procedure btnRefreshClick(Sender: TObject);
     procedure btnCloseClick(Sender: TObject);
@@ -64,11 +65,14 @@ type
       const Args: ICoreWebView2MoveFocusRequestedEventArgs);
     procedure wbIENavigationStarting({%H-}ASender: TObject; {%H-}const AWebView: ICoreWebView2;
       const Args: ICoreWebView2NavigationStartingEventArgs);
+    procedure wbIESaveAsUIShowing({%H-}ASender: TObject; {%H-}const AWebView: ICoreWebView2;
+      const Args: ICoreWebView2SaveAsUIShowingEventArgs);
     procedure btnCloseStatusbarClick(Sender: TObject);
     procedure btnAboutClick(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure tmrAutorefreshTimer(Sender: TObject);
     procedure chkFreezeClick(Sender: TObject);
+    procedure btnSaveAsClick({%H-}Sender: TObject);
     procedure btnNavBackClick({%H-}Sender: TObject);
     procedure btnNavForwardClick({%H-}Sender: TObject);
     procedure sbrIEDrawPanel(StatusBar: TStatusBar; Panel: TStatusPanel; const Rect: TRect);
@@ -94,6 +98,8 @@ type
     procedure SaveScrollPos;
     procedure RestoreScrollPos;
     procedure GetDirectFunction;
+    procedure ExportHTML;
+    procedure SaveHTML(const Html: wvstring);
     procedure UpdateNavButton(var ABtn: TBitBtn; NewState: Boolean);
 
     function  DetermineCustomFilter: string;
@@ -139,6 +145,7 @@ const
   APP_DOMAIN = 'preview.host';
   ASSET_DOMAIN = 'preview.static';
   RESTORE_SCRIPT_ID = $7F;
+  EXPORT_HTML_SCRIPT_ID = $FF;
   PLACEHOLDER_CONTENT =
     '<html>' +
     ' <body style="background:#ececec;color:#999">' +
@@ -487,6 +494,12 @@ begin
 end {TFrmWebView2Preview.chkFreezeClick};
 
 { ------------------------------------------------------------------------------------------------ }
+procedure TFrmWebView2Preview.btnSaveAsClick(Sender: TObject);
+begin
+  ExportHTML;
+end {TFrmWebView2Preview.btnSaveAsClick};
+
+{ ------------------------------------------------------------------------------------------------ }
 procedure TFrmWebView2Preview.btnNavBackClick(Sender: TObject);
 begin
   if wbIE <> nil then
@@ -518,6 +531,7 @@ begin
   try
     IsHTML := not WideSameText(ContentStream.Text, PLACEHOLDER_CONTENT);
     sbrIE.Visible := IsHTML and (Length(sbrIE.Panels[0].Text) > 0);
+    UpdateNavButton(BtnSaveAs, IsHTML);
     if IsHTML then begin
       HTML := ContentStream.Text;
 ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy({$ifdef FPC}UTF8Encode{$endif}(HTML), 1, 10), #13#10, '', [rfReplaceAll]), Length(HTML), BufferID]);
@@ -628,6 +642,13 @@ begin
         if IsStringResult then
         begin
           Val (JSResultString, JSIntValue, ParseResult);
+          if ExecutionID = EXPORT_HTML_SCRIPT_ID then
+          begin
+            if JSResultString = '' then
+              MessageBoxW(0, 'HTML could not be exported!', PWChar('Export HTML'), MB_ICONERROR)
+            else
+              SaveHTML(JSResultString);
+          end else
           if (ParseResult = 0) and (JSIntValue > -1) then
           begin
             P.Y := JSIntValue shr 11;
@@ -660,6 +681,21 @@ begin
     COREWEBVIEW2_MOVE_FOCUS_REASON_PREVIOUS:  btnClose.SetFocus;
   end;
   Args.Set_Handled($00000001);
+end;
+
+{ ------------------------------------------------------------------------------------------------ }
+procedure TFrmWebView2Preview.wbIESaveAsUIShowing({%H-}ASender: TObject; {%H-}const AWebView: ICoreWebView2;
+  const Args: ICoreWebView2SaveAsUIShowingEventArgs);
+var
+  EventArgs : TCoreWebView2SaveAsUIShowingEventArgs;
+begin
+  try
+    EventArgs := TCoreWebView2SaveAsUIShowingEventArgs.Create(Args);
+    EventArgs.Cancel := True;
+    ExportHTML;
+  finally
+    FreeAndNil(EventArgs);
+  end;
 end;
 
 { ------------------------------------------------------------------------------------------------ }
@@ -750,6 +786,61 @@ begin
     FSciDirectPtr := HScintilla;
   end;
 end {TFrmWebView2Preview.GetDirectFunction};
+
+{ ------------------------------------------------------------------------------------------------ }
+procedure TFrmWebView2Preview.ExportHTML;
+const
+  STRIP_LOCAL_CONTENT_JS =
+    '(() => {' +
+    ' const doc = document.cloneNode(true).querySelector("html");' +
+    ' const _base = doc.querySelector("head base");' +
+    ' const toArray = obj => Array.prototype.slice.call(obj);' +
+    ' try {' +
+    '  if (_base) {' +
+    '    const ts = `Exported ${(new Date()).toISOString()} by ${window.navigator.userAgent}`;' +
+    '    doc.querySelector("head").replaceChild(document.createComment(ts), _base);' +
+    '  }' +
+    '  toArray(doc.querySelectorAll("script")).forEach(s => s.parentNode.removeChild(s));' +
+    '  toArray(doc.querySelectorAll("link")).forEach(s => {' +
+    '   if (s.href.includes("' + ASSET_DOMAIN + '") || s.href.includes("' + EXT_DOMAIN + '")) {' +
+    '     s.parentNode.removeChild(s);' +
+    '   }' +
+    '  });' +
+    ' } catch (_){ }' +
+    ' const getDocType = () => {' +
+    '   if (document.doctype && !document.doctype.publicId) {' +
+    '     return `<!DOCTYPE html>`;' +
+    '   } else if (document.doctype && !document.doctype.systemId) {' +
+    '     return `<!DOCTYPE html PUBLIC "${document.doctype.publicId}">`;' +
+    '   } else {' +
+    '     return `<!DOCTYPE html PUBLIC "${document.doctype.publicId}" "${document.doctype.systemId}">`;' +
+    '   }'+
+    ' };' +
+    ' const _attrs = toArray(doc.attributes).map(a => `${a.name}="${a.nodeValue}"`).join(" ");' +
+    ' return `${getDocType()}\n<${("html " + _attrs).trim()}>\n${doc.innerHTML}\n</html>\n`;' +
+    '})();';
+begin
+  wbie.ExecuteScriptWithResult(STRIP_LOCAL_CONTENT_JS, EXPORT_HTML_SCRIPT_ID);
+end {TFrmWebView2Preview.ExportHTML};
+
+{ ------------------------------------------------------------------------------------------------ }
+procedure TFrmWebView2Preview.SaveHTML(const Html: wvstring);
+var
+  ExportFileName: array[0..MAX_PATH] of nppChar;
+begin
+  SendMessage(Npp.NppData.NppHandle, NPPM_GETNAMEPART, MAX_PATH, LPARAM(@ExportFileName[0]));
+  dlgExportHTML.FileName := UTF8Encode(WideFormat('%s%s', [ExportFileName, dlgExportHTML.DefaultExt]));
+  if dlgExportHTML.Execute then begin
+    with TUnicodeStream.Create() do begin
+      try
+        Text := Html;
+        SaveToFile(UTF8ToString(dlgExportHTML.FileName));
+      finally
+        Free;
+      end;
+    end;
+  end;
+end {TFrmWebView2Preview.SaveHTML};
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TFrmWebView2Preview.ForgetBuffer(const BufferID: TBufferID);

@@ -35,8 +35,9 @@ type
     sbrIE: TStatusBar;
     pnlPreview: TPanel;
     pnlHTML: TPanel;
-    btnAbout: TBitBtn;
+    btnSaveAs, btnAbout: TBitBtn;
     tmrAutorefresh: TTimer;
+    dlgExportHTML: TSaveDialog;
     chkFreeze: TCheckBox;
     procedure btnRefreshClick(Sender: TObject);
     procedure btnCloseClick(Sender: TObject);
@@ -59,6 +60,7 @@ type
     procedure FormDestroy(Sender: TObject);
     procedure tmrAutorefreshTimer(Sender: TObject);
     procedure chkFreezeClick(Sender: TObject);
+    procedure btnSaveAsClick({%H-}Sender: TObject);
     procedure wbIEDocumentComplete(ASender: TObject; const pDisp: IDispatch; const URL: OleVariant);
 {$ifdef FPC}
     procedure SubclassAndTheme(DmfMask: Cardinal); override;
@@ -73,6 +75,7 @@ type
     FFilterThread: TCustomFilterThread;
     FScrollTop: Integer;
     FScrollLeft: Integer;
+    FUsingIE11Features: Boolean;
     FEnsureRendered: Boolean;
     FReloadDOM: Boolean;
     FRenderMarkdown: Boolean;
@@ -85,6 +88,8 @@ type
     function  DetermineCustomFilter: string;
     function  ExecuteCustomFilter(const FilterName: string; const HTML: WideString; const BufferID: TBufferID): Boolean;
     function  TransformXMLToHTML(const XML: WideString): WideString;
+    procedure ExportHTML;
+    procedure SaveHTML(const Html: WideString);
 
     procedure FilterThreadTerminate(Sender: TObject);
   public
@@ -167,6 +172,7 @@ begin
     Style := psOwnerDraw;
 {$endif}
   end;
+  FUsingIE11Features := (GetBrowserEmulation >= 11000);
 end;
 
 { ------------------------------------------------------------------------------------------------ }
@@ -381,6 +387,12 @@ begin
 end {TFrmIEPreview.chkFreezeClick};
 
 { ------------------------------------------------------------------------------------------------ }
+procedure TFrmIEPreview.btnSaveAsClick(Sender: TObject);
+begin
+  ExportHTML;
+end {TFrmIEPreview.btnSaveAsClick};
+
+{ ------------------------------------------------------------------------------------------------ }
 procedure TFrmIEPreview.DisplayPreview(const BufferID: TBufferID);
 var
   IsHTML: Boolean;
@@ -393,6 +405,8 @@ begin
     IsHTML := not WideSameText(ContentStream.Text, PLACEHOLDER_CONTENT);
     pnlHTML.Visible := IsHTML;
     sbrIE.Visible := IsHTML and (Length(sbrIE.Panels[0].Text) > 0);
+    btnSaveAs.Enabled := FUsingIE11Features and IsHTML;
+    btnSaveAs.ShowHint := btnSaveAs.Enabled;
     if IsHTML then begin
       HTML := ContentStream.Text;
 ODS('DisplayPreview(HTML: "%s"(%d); BufferID: %x)', [StringReplace(Copy({$ifdef FPC}UTF8Encode{$endif}(HTML), 1, 10), #13#10, '', [rfReplaceAll]), Length(HTML), BufferID]);
@@ -851,6 +865,93 @@ begin
     VarClear(xDoc);
   end;
 end {TFrmIEPreview.TransformXMLToHTML};
+
+{ ------------------------------------------------------------------------------------------------ }
+procedure TFrmIEPreview.ExportHTML;
+const
+  STRIP_LOCAL_CONTENT_JS =
+    '(function() {' +
+    '  var doc = document.cloneNode(true).querySelector("html");' +
+    '  var _base = doc.querySelector("head base");' +
+    '  var toArray = function toArray2(obj) {' +
+    '    return Array.prototype.slice.call(obj);' +
+    '  };' +
+    '  try {' +
+    '    if (_base) {' +
+    '      var ts = "Exported " + (new Date()).toISOString();' +
+    '      doc.querySelector("head").replaceChild(document.createComment(ts), _base);' +
+    '    }' +
+    '    toArray(doc.querySelectorAll("script")).forEach(function(s) {' +
+    '      return s.parentNode.removeChild(s);' +
+    '    });' +
+    '    toArray(doc.querySelectorAll("link")).forEach(function(s) {' +
+    '      if (s.href.indexOf("file:///") > -1) {' +
+    '        s.parentNode.removeChild(s);' +
+    '      }' +
+    '    });' +
+    '  } catch (_) {' +
+    '  }' +
+    '  var getDocType = function getDocType2() {' +
+    '    if (document.doctype && !document.doctype.publicId) {' +
+    '      return "<!DOCTYPE html>";' +
+    '    } else if (document.doctype && !document.doctype.systemId) {' +
+    '      return "<!DOCTYPE html PUBLIC \"".concat(document.doctype.publicId, "\"");' +
+    '    } else {' +
+    '      return "<!DOCTYPE html PUBLIC \"".concat(document.doctype.publicId, "\" \"").concat(document.doctype.systemId, "\">");' +
+    '    }' +
+    '  };' +
+    '  var _attrs = toArray(doc.attributes).map(function(a) {' +
+    '    return "".concat(a.name, "=\"").concat(a.nodeValue, "\"");' +
+    '  }).join(" ");' +
+    '  var _export = document.createElement("div");' +
+    '  _export.id = "for_export";' +
+    '  _export.style.visibility = "hidden";' +
+    '  document.body.appendChild(_export);'+
+    '  _export.innerText = "".concat(getDocType(), "\n<").concat(("html " + _attrs).trim(), ">\n").concat(doc.innerHTML, "\n</html>\n");' +
+    '})();';
+var
+  DOM: IHTMLDocument3;
+  ExportContent: IHTMLElement;
+  HtmlString: WideString;
+begin
+  try
+    ExecuteScript(STRIP_LOCAL_CONTENT_JS);
+    if Assigned(wbIE.Document) then
+    begin
+      DOM := wbIE.Document as IHTMLDocument3;
+      ExportContent := DOM.getElementById('for_export') as IHTMLElement;
+      if Assigned(ExportContent) then
+      begin
+        HtmlString := VarToWideStrDef(ExportContent.InnerText, EmptyWideStr);
+        if HtmlString = '' then
+          MessageBoxW(0, 'HTML could not be exported!', PWChar('Export HTML'), MB_ICONERROR)
+        else
+          SaveHTML(HtmlString);
+      end;
+    end;
+  finally
+    ExecuteScript('var _export=document.getElementById("export");if(_export!==null){document.body.removeChild(_export);}');
+  end;
+end {TFrmIEPreview.ExportHTML};
+
+{ ------------------------------------------------------------------------------------------------ }
+procedure TFrmIEPreview.SaveHTML(const Html: WideString);
+var
+  ExportFileName: array[0..MAX_PATH] of nppChar;
+begin
+  SendMessage(Npp.NppData.NppHandle, NPPM_GETNAMEPART, MAX_PATH, LPARAM(@ExportFileName[0]));
+  dlgExportHTML.FileName := UTF8Encode(WideFormat('%s%s', [ExportFileName, dlgExportHTML.DefaultExt]));
+  if dlgExportHTML.Execute then begin
+    with TUnicodeStream.Create() do begin
+      try
+        Text := Html;
+        SaveToFile(UTF8ToString(dlgExportHTML.FileName));
+      finally
+        Free;
+      end;
+    end;
+  end;
+end {TFrmIEPreview.SaveHTML};
 
 { ------------------------------------------------------------------------------------------------ }
 procedure TFrmIEPreview.wbIEBeforeNavigate2(ASender: TObject; const pDisp: IDispatch; const URL,
